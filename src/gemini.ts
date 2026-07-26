@@ -85,11 +85,14 @@ export async function generatePost(
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     settings.model,
-  )}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
+  )}:generateContent`;
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": settings.apiKey,
+    },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
       generationConfig: {
