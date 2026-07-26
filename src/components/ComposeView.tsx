@@ -58,12 +58,14 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
       </label>
 
       <label className="field">
-        <span>장소/지역명 (선택)</span>
+        <span>{category === "레시피" ? "요리 이름 (선택)" : "장소/지역명 (선택)"}</span>
         <input
           type="text"
           value={place}
           onChange={(e) => setPlace(e.target.value)}
-          placeholder="예: 구리, 강남역, 제주도"
+          placeholder={
+            category === "레시피" ? "예: 김치볶음밥, 계란찜" : "예: 구리, 강남역, 제주도"
+          }
         />
       </label>
 
@@ -72,7 +74,11 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="메뉴 이름, 가격, 특이사항 등 자유롭게 입력하세요"
+          placeholder={
+            category === "레시피"
+              ? "몇 인분, 조리 시간, 맛 조절 팁 등 자유롭게 입력하세요"
+              : "메뉴 이름, 가격, 특이사항 등 자유롭게 입력하세요"
+          }
           rows={3}
         />
       </label>
@@ -87,6 +93,11 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
           onChange={(e) => handleFiles(e.target.files)}
           disabled={loadingImages}
         />
+        {category === "레시피" && (
+          <p className="hint">
+            재료 사진 → 만드는 과정 사진 → 완성 사진 순서로 올려주시면 더 정확하게 정리해줘요.
+          </p>
+        )}
       </label>
 
       {images.length > 0 && (

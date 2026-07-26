@@ -1,6 +1,6 @@
-export type Category = "맛집" | "운동" | "여행" | "기타";
+export type Category = "맛집" | "레시피" | "운동" | "여행" | "기타";
 
-export const CATEGORIES: Category[] = ["맛집", "운동", "여행", "기타"];
+export const CATEGORIES: Category[] = ["맛집", "레시피", "운동", "여행", "기타"];
 
 export interface Settings {
   apiKey: string;

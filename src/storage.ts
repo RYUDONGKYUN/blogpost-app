@@ -5,7 +5,7 @@ const HISTORY_KEY = "blogpost_history";
 
 const DEFAULT_SETTINGS: Settings = {
   apiKey: "",
-  model: "gemini-2.5-flash",
+  model: "gemini-3.6-flash",
 };
 
 /** total entries kept across all categories, oldest dropped first */
