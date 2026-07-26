@@ -1,4 +1,4 @@
-import type { ComposeInput, GeneratedPost, Settings } from "./types";
+import type { ComposeInput, GeneratedPost, PostHistoryEntry, Settings } from "./types";
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
@@ -10,7 +10,28 @@ const RESPONSE_SCHEMA = {
   required: ["title", "keywords", "body"],
 };
 
-function buildPrompt(input: ComposeInput): string {
+/** Extracts a short "opening hook" from a generated body, for storing in history
+ * so future prompts can be steered away from repeating the same phrasing. */
+export function extractOpening(body: string): string {
+  const firstLine = body
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && !/^\[사진\d+\]$/.test(line));
+  return (firstLine ?? "").slice(0, 80);
+}
+
+function buildHistorySection(history: PostHistoryEntry[]): string {
+  if (history.length === 0) return "";
+  const lines = history
+    .map((h) => `- 제목: "${h.title}" / 도입부: "${h.opening}"`)
+    .join("\n");
+  return `\n[반복 회피]
+아래는 최근에 이 카테고리로 작성했던 제목과 도입부입니다. 같은 어투/문장 구조/표현을 반복하지 말고, 톤(친근한 후기体)은 유지하되 전개 방식과 표현을 다르게 써주세요:
+${lines}
+`;
+}
+
+function buildPrompt(input: ComposeInput, history: PostHistoryEntry[]): string {
   const placeLine = input.place.trim()
     ? `장소/지역명: ${input.place.trim()}`
     : "장소/지역명: (알 수 없음 - 사진 속 분위기로 자연스럽게 유추하거나 일반적인 표현 사용)";
@@ -24,6 +45,7 @@ function buildPrompt(input: ComposeInput): string {
 
 ${placeLine}
 ${notesLine}
+${buildHistorySection(history)}
 
 [제목 규칙]
 - 형식: "[지역/장소 ${input.category}] 나머지 제목" 처럼 대괄호로 시작.
@@ -47,6 +69,7 @@ JSON 스키마에 맞춰 title, keywords, body 세 필드로만 응답하세요.
 export async function generatePost(
   settings: Settings,
   input: ComposeInput,
+  history: PostHistoryEntry[] = [],
 ): Promise<GeneratedPost> {
   if (!settings.apiKey.trim()) {
     throw new Error("설정 화면에서 Gemini API 키를 먼저 입력해주세요.");
@@ -55,7 +78,7 @@ export async function generatePost(
     throw new Error("사진을 1장 이상 업로드해주세요.");
   }
 
-  const parts: unknown[] = [{ text: buildPrompt(input) }];
+  const parts: unknown[] = [{ text: buildPrompt(input, history) }];
   for (const img of input.images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
   }

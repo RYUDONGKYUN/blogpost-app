@@ -29,3 +29,11 @@ export interface GeneratedPost {
   keywords: string[];
   body: string;
 }
+
+export interface PostHistoryEntry {
+  category: Category;
+  title: string;
+  /** first line/opening hook of the body, used to steer future generations away from repeating it */
+  opening: string;
+  createdAt: number;
+}

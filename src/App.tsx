@@ -3,8 +3,8 @@ import "./App.css";
 import SettingsView from "./components/SettingsView";
 import ComposeView from "./components/ComposeView";
 import ResultView from "./components/ResultView";
-import { loadSettings, saveSettings } from "./storage";
-import { generatePost } from "./gemini";
+import { addHistoryEntry, loadRecentHistory, loadSettings, saveSettings } from "./storage";
+import { extractOpening, generatePost } from "./gemini";
 import type { ComposeInput, GeneratedPost, Settings, UploadedImage } from "./types";
 
 type Screen = "compose" | "settings" | "result";
@@ -27,7 +27,14 @@ export default function App() {
     setError(null);
     setBusy(true);
     try {
-      const post = await generatePost(settings, input);
+      const history = loadRecentHistory(input.category);
+      const post = await generatePost(settings, input, history);
+      addHistoryEntry({
+        category: input.category,
+        title: post.title,
+        opening: extractOpening(post.body),
+        createdAt: Date.now(),
+      });
       setResult({ post, images: input.images });
       setScreen("result");
     } catch (e) {
