@@ -122,7 +122,11 @@ function insertDeterministicBoxes(body: string, input: ComposeInput): string {
 
   if (input.hours.trim()) {
     const sourceLine = input.mapLink.trim() ? "(출처: 네이버지도)" : "(출처: 직접 확인)";
-    const box = `※운영시간※\n🕐 ${input.hours.trim()}\n${sourceLine}`;
+    const hoursLines = input.hours
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const box = `※운영시간※\n🕐 ${hoursLines.join("\n")}\n${sourceLine}`;
     result = result.replace(/\[운영시간정보\]/g, box);
   } else {
     result = result.replace(/[ \t]*\[운영시간정보\][ \t]*\n?/g, "");

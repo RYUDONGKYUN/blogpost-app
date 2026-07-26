@@ -77,14 +77,15 @@ export default function ComposeView({
         <>
           <label className="field">
             <span>영업시간 (선택)</span>
-            <input
-              type="text"
+            <textarea
               value={hours}
               onChange={(e) => onChange({ ...value, hours: e.target.value })}
-              placeholder="예: 매일 11:00~21:00 (브레이크타임 15:00~17:00, 월요일 휴무)"
+              placeholder={"예:\n월-금 11:00~21:00 (브레이크타임 15:00~17:00)\n토 11:00~15:00\n일 휴무"}
+              rows={4}
             />
             <p className="hint">
-              입력하면 본문에 인용구 형태의 정보 박스로 그대로 들어가요 (AI가 지어내지 않아요).
+              요일별로 다르면 줄바꿈해서 나눠 입력하세요. 입력한 그대로 본문 정보 박스에
+              들어가요 (AI가 지어내지 않아요).
             </p>
           </label>
 
