@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BlogPost AI</string>
+    <string name="title_activity_main">BlogPost AI</string>
+    <string name="package_name">com.dozi0.blogpostapp</string>
+    <string name="custom_url_scheme">com.dozi0.blogpostapp</string>
+</resources>
