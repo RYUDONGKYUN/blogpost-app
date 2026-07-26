@@ -23,7 +23,7 @@ export default function ComposeView({
 }: Props) {
   const [loadingImages, setLoadingImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { category, place, notes, images } = value;
+  const { category, place, notes, hours, mapLink, images } = value;
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -72,6 +72,36 @@ export default function ComposeView({
           }
         />
       </label>
+
+      {category === "맛집" && (
+        <>
+          <label className="field">
+            <span>영업시간 (선택)</span>
+            <input
+              type="text"
+              value={hours}
+              onChange={(e) => onChange({ ...value, hours: e.target.value })}
+              placeholder="예: 매일 11:00~21:00 (브레이크타임 15:00~17:00, 월요일 휴무)"
+            />
+            <p className="hint">
+              입력하면 본문에 인용구 형태의 정보 박스로 그대로 들어가요 (AI가 지어내지 않아요).
+            </p>
+          </label>
+
+          <label className="field">
+            <span>네이버지도 공유 링크 (선택)</span>
+            <input
+              type="url"
+              value={mapLink}
+              onChange={(e) => onChange({ ...value, mapLink: e.target.value })}
+              placeholder="예: https://naver.me/xxxxxxx"
+            />
+            <p className="hint">
+              네이버지도 앱에서 장소 공유 → 링크 복사한 걸 붙여넣으면 정보 박스에 함께 들어가요.
+            </p>
+          </label>
+        </>
+      )}
 
       <label className="field">
         <span>추가로 알려주고 싶은 내용 (선택)</span>

@@ -62,15 +62,83 @@ function buildBodyRule(photoCount: number, category: ComposeInput["category"]): 
 - 이모지를 적당히 섞어서 가독성 있게.
 - 문단 사이는 빈 줄로 구분해서 네이버 블로그 에디터에 바로 붙여넣기 좋게.
 - 사진 마커는 정확히 "[사진1]", "[사진2]" 형식으로 독립된 줄에 넣고, 총 ${photoCount}장을 1번부터 ${photoCount}번까지 모두 한 번씩만 사용.
-- 마지막 줄에는 해시태그 형식의 키워드 5~8개를 나열.
-- 과장되거나 근거 없는 효능/효과 주장은 하지 말 것.`;
+- 과장되거나 근거 없는 효능/효과 주장은 하지 말 것.
+- 본문 마지막 줄에 해시태그를 쓰지 마세요 (앱이 별도로 붙입니다).`;
+  }
+  if (category === "맛집") {
+    return `사용자가 실제로 쓰는 템플릿 구조를 그대로 따라서 작성하세요. 아래에서 큰따옴표로 감싼 부분은 본문에 글자 그대로(따옴표 없이) 넣어야 하는 소제목/마커이고, → 뒤는 그 자리에 무엇을 쓸지 설명하는 지시사항이니 지시사항 문장 자체를 본문에 베끼지 마세요.
+
+"0. 내돈내산 솔직후기 인증" → 이 소제목 아래에, 협찬/광고 없이 실제로 자기 돈 주고 방문한 솔직한 후기라는 것을 밝히는 캐주얼한 한 줄을 쓰세요.
+
+"1. 가게된 이유" → 이 소제목 아래에, 이 가게를 가게 된 계기/이유를 1~2문단으로 친근하게 설명하세요.
+
+"2. 가게 내외부사진" → 이 소제목 아래에, 사진들 중 가게 외관/내부/분위기를 보여주는 사진들을 골라 짧은 설명과 함께 [사진N] 마커를 배치하세요.
+
+"5. 사진과 설명" → 이 소제목 아래에, 나머지 음식 사진들에 대해 하나씩 설명하며 [사진N] 마커를 배치하세요. (2번과 5번을 합쳐서 총 ${photoCount}장의 사진을 1번부터 ${photoCount}번까지 모두 한 번씩 사용)
+
+"※메뉴판※" → 이 소제목 아래에, 사진이나 참고 정보에서 파악할 수 있는 메뉴/가격을 정리하세요. 정확히 안 보이면 가격은 생략하고 메뉴 이름 위주로만 쓰고, 확실하지 않은 가격은 절대 지어내지 마세요.
+
+"[운영시간정보]" → 이 마커를 독립된 줄에 그대로 한 번 넣으세요 (앱이 실제 운영시간 박스로 치환합니다). 앞뒤로 다른 텍스트를 붙이지 마세요.
+
+"[지도정보]" → 이 마커를 독립된 줄에 그대로 한 번 넣으세요 (앱이 실제 지도/주소 박스로 치환합니다). 이 마커 바로 다음 줄에 주차 관련 팁을 한 문장 쓰되, "위에서 확인하세요"처럼 다른 섹션을 가리키는 표현 없이 그 문장 자체로 뜻이 통하게 쓰세요 (예: "주차는 가게 앞 공영주차장을 이용하면 편해요"). 주차 정보를 전혀 알 수 없으면 지어내지 말고 "주차는 미리 확인해보고 가시는 걸 추천드려요" 정도로 무난하게 쓰세요.
+
+"7. 총평" → 이 소제목 아래에 아래 순서로 쓰세요:
+  1) "오늘의 총평! 재방문의사 있음~~" 또는 "오늘의 총평! 재방문의사 없음~~" 처럼, 실제 후기 내용과 일치하는 재방문 의향을 캐주얼하게 밝히는 한 줄.
+  2) 왜 그렇게 느꼈는지 2~3줄로 편하게 설명 (다른 곳과 비교하는 등 자연스러운 비유, "~~"나 "ㅎㅎ" 같은 말투를 섞어도 좋음).
+  3) 빈 줄 하나, 그 다음 "오늘의 레고블럭 N개~~" 한 줄. N은 위 총평 내용과 반드시 일치해야 함: 1개=재방문 의사 없음/아쉬움 많음, 2개=평범함, 3개=만족스러움/재방문 가능, 4개=대만족/추천, 4.5개=거의 완벽, 5개=인생 맛집. (4.5 외에는 소수점 쓰지 말 것)
+  4) 바로 다음 줄부터 "사진 설명을 입력하세요." 라는 줄을 N을 반올림한 정수 횟수만큼 한 줄씩 반복해서 넣기 (예: 레고블럭 3개면 3줄, 4.5개면 5줄).
+
+위 순서(0→1→2→5→메뉴판→운영시간정보→지도정보→7)를 그대로 지키고, 번호가 0,1,2,5,7로 중간에 비는 것도 의도된 것이니 3,4,6은 만들지 마세요.
+
+[공통 규칙]
+- 실제 방문/경험 후기처럼 친근하고 편안한 구어체 반말 섞인 존댓말로 작성 (예: "~했어요", "~하더라구요").
+- 이모지를 적당히 섞어서 가독성 있게.
+- 각 섹션 사이는 빈 줄로 구분해서 네이버 블로그 에디터에 바로 붙여넣기 좋게.
+- 과장되거나 근거 없는 효능/효과/가격 주장은 하지 말 것.
+- 운영시간/주소/지도링크를 마커 대신 직접 텍스트로 쓰지 마세요. 반드시 [운영시간정보], [지도정보] 마커로만 표시하세요.
+- "총평" 섹션 뒤에는 그 외 다른 내용을 절대 추가하지 마세요 (평점 기준표는 앱이 자동으로 붙입니다). 본문 마지막 줄에 해시태그도 쓰지 마세요 (앱이 별도로 붙입니다).`;
   }
   return `- 실제 방문/경험 후기처럼 친근하고 편안한 구어체 반말 섞인 존댓말로 작성 (예: "~했어요", "~하더라구요").
 - 이모지를 적당히 섞어서 가독성 있게.
 - 문단 사이는 빈 줄로 구분해서 네이버 블로그 에디터에 바로 붙여넣기 좋게.
 - 사진을 삽입할 위치마다 정확히 "[사진1]", "[사진2]" 형식의 마커를 독립된 줄에 넣기 (총 ${photoCount}장, 1번부터 ${photoCount}번까지 모두 한 번씩 사용, 자연스러운 위치에 분산 배치).
-- 마지막 줄에는 해시태그 형식의 키워드 5~8개를 나열.
-- 과장되거나 근거 없는 효능/효과 주장은 하지 말 것.`;
+- 과장되거나 근거 없는 효능/효과 주장은 하지 말 것.
+- 본문 마지막 줄에 해시태그를 쓰지 마세요 (앱이 별도로 붙입니다).`;
+}
+
+const LEGO_RATING_LEGEND = `1개 : 재방문 의사 없음. 여러모로 아쉬움이 많이 남았던 곳.
+2개 : 평범한 곳. 근처에 갈 일이 있다면 한 번쯤 고려해 볼 만함.
+3개 : 맛있고 만족스러움! 동네를 다시 방문한다면 갈만한 곳
+4개 : 대만족! 멀리서도 찾아올 가치가 있는 찐 추천 맛집.
+4.5개 : ✨ 내 기준 최고 만점 ✨ 와인에 100점이 없듯이, 완벽에 가까운 역대급 인생 맛집!
+5개 : 살면서 만날 수 있는 곳이겠지?`;
+
+/** Replaces the [운영시간정보]/[지도정보] markers the model is instructed to leave in
+ * the body with 인용구-style boxes built from user-entered facts only (never
+ * AI-generated), so business hours / map links can't be hallucinated or garbled.
+ * Markers with no corresponding data are removed entirely rather than left empty. */
+function insertDeterministicBoxes(body: string, input: ComposeInput): string {
+  let result = body;
+
+  if (input.hours.trim()) {
+    const sourceLine = input.mapLink.trim() ? "(출처: 네이버지도)" : "(출처: 직접 확인)";
+    const box = `※운영시간※\n🕐 ${input.hours.trim()}\n${sourceLine}`;
+    result = result.replace(/\[운영시간정보\]/g, box);
+  } else {
+    result = result.replace(/[ \t]*\[운영시간정보\][ \t]*\n?/g, "");
+  }
+
+  if (input.place.trim() || input.mapLink.trim()) {
+    const lines = ["※지도와 주차팁※"];
+    if (input.place.trim()) lines.push(`📍 ${input.place.trim()}`);
+    if (input.mapLink.trim()) lines.push(`🔗 네이버지도 : ${input.mapLink.trim()}`);
+    result = result.replace(/\[지도정보\]/g, lines.join("\n"));
+  } else {
+    result = result.replace(/[ \t]*\[지도정보\][ \t]*\n?/g, "");
+  }
+
+  // collapse blank-line runs left behind by removed markers
+  return result.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function buildClarificationSection(qa: ClarificationTurn[]): string {
@@ -193,9 +261,15 @@ export async function generatePost(
   if (!parsed.title || !parsed.body || !Array.isArray(parsed.keywords)) {
     throw new Error("Gemini 응답 형식이 올바르지 않습니다.");
   }
+
+  let body = parsed.body;
+  if (input.category === "맛집") {
+    body = `${insertDeterministicBoxes(body, input)}\n\n${LEGO_RATING_LEGEND}`;
+  }
+
   return {
     status: "ready",
-    post: { title: parsed.title, keywords: parsed.keywords, body: parsed.body },
+    post: { title: parsed.title, keywords: parsed.keywords, body },
   };
 }
 

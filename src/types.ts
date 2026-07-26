@@ -21,6 +21,10 @@ export interface ComposeInput {
   category: Category;
   place: string;
   notes: string;
+  /** business hours, shown for 맛집 posts in a quote-style info block */
+  hours: string;
+  /** Naver Map share link, shown for 맛집 posts in a quote-style info block */
+  mapLink: string;
   images: UploadedImage[];
 }
 

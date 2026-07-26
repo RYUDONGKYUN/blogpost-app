@@ -11,7 +11,14 @@ import type { ClarificationTurn, ComposeInput, GeneratedPost, Settings, Uploaded
 
 type Screen = "compose" | "settings" | "result" | "history";
 
-const EMPTY_COMPOSE: ComposeInput = { category: "맛집", place: "", notes: "", images: [] };
+const EMPTY_COMPOSE: ComposeInput = {
+  category: "맛집",
+  place: "",
+  notes: "",
+  hours: "",
+  mapLink: "",
+  images: [],
+};
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings());
