@@ -31,9 +31,13 @@ export interface GeneratedPost {
 }
 
 export interface PostHistoryEntry {
+  id: string;
   category: Category;
+  place: string;
   title: string;
-  /** first line/opening hook of the body, used to steer future generations away from repeating it */
-  opening: string;
+  keywords: string[];
+  body: string;
+  /** small preview of the first uploaded photo, for the history list */
+  thumbnail?: string;
   createdAt: number;
 }

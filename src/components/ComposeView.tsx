@@ -1,28 +1,27 @@
 import { useRef, useState } from "react";
-import type { Category, ComposeInput, UploadedImage } from "../types";
+import type { ComposeInput, UploadedImage } from "../types";
 import { CATEGORIES } from "../types";
 import { fileToUploadedImage } from "../imageUtils";
 
 interface Props {
-  onGenerate: (input: ComposeInput) => void;
+  value: ComposeInput;
+  onChange: (value: ComposeInput) => void;
+  onGenerate: () => void;
   busy: boolean;
   errorMessage: string | null;
 }
 
-export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
-  const [category, setCategory] = useState<Category>("맛집");
-  const [place, setPlace] = useState("");
-  const [notes, setNotes] = useState("");
-  const [images, setImages] = useState<UploadedImage[]>([]);
+export default function ComposeView({ value, onChange, onGenerate, busy, errorMessage }: Props) {
   const [loadingImages, setLoadingImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { category, place, notes, images } = value;
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setLoadingImages(true);
     try {
       const newImages = await Promise.all(Array.from(files).map(fileToUploadedImage));
-      setImages((prev) => [...prev, ...newImages]);
+      onChange({ ...value, images: [...images, ...newImages] });
     } finally {
       setLoadingImages(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -30,11 +29,7 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
   }
 
   function removeImage(id: string) {
-    setImages((prev) => prev.filter((img) => img.id !== id));
-  }
-
-  function handleSubmit() {
-    onGenerate({ category, place, notes, images });
+    onChange({ ...value, images: images.filter((img: UploadedImage) => img.id !== id) });
   }
 
   return (
@@ -49,7 +44,7 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
               key={c}
               type="button"
               className={`chip ${category === c ? "chip-active" : ""}`}
-              onClick={() => setCategory(c)}
+              onClick={() => onChange({ ...value, category: c })}
             >
               {c}
             </button>
@@ -62,7 +57,7 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
         <input
           type="text"
           value={place}
-          onChange={(e) => setPlace(e.target.value)}
+          onChange={(e) => onChange({ ...value, place: e.target.value })}
           placeholder={
             category === "레시피" ? "예: 김치볶음밥, 계란찜" : "예: 구리, 강남역, 제주도"
           }
@@ -73,7 +68,7 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
         <span>추가로 알려주고 싶은 내용 (선택)</span>
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => onChange({ ...value, notes: e.target.value })}
           placeholder={
             category === "레시피"
               ? "몇 인분, 조리 시간, 맛 조절 팁 등 자유롭게 입력하세요"
@@ -124,7 +119,7 @@ export default function ComposeView({ onGenerate, busy, errorMessage }: Props) {
       <div className="actions">
         <button
           className="primary-btn"
-          onClick={handleSubmit}
+          onClick={onGenerate}
           disabled={busy || loadingImages || images.length === 0}
         >
           {busy ? "글 작성 중..." : "블로그 글 생성하기"}

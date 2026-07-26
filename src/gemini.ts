@@ -10,9 +10,9 @@ const RESPONSE_SCHEMA = {
   required: ["title", "keywords", "body"],
 };
 
-/** Extracts a short "opening hook" from a generated body, for storing in history
- * so future prompts can be steered away from repeating the same phrasing. */
-export function extractOpening(body: string): string {
+/** Extracts a short "opening hook" from a generated body, used to steer future
+ * generations away from repeating the same phrasing. */
+function extractOpening(body: string): string {
   const firstLine = body
     .split("\n")
     .map((line) => line.trim())
@@ -23,7 +23,7 @@ export function extractOpening(body: string): string {
 function buildHistorySection(history: PostHistoryEntry[]): string {
   if (history.length === 0) return "";
   const lines = history
-    .map((h) => `- 제목: "${h.title}" / 도입부: "${h.opening}"`)
+    .map((h) => `- 제목: "${h.title}" / 도입부: "${extractOpening(h.body)}"`)
     .join("\n");
   return `\n[반복 회피]
 아래는 최근에 이 카테고리로 작성했던 제목과 도입부입니다. 같은 어투/문장 구조/표현을 반복하지 말고, 톤(친근한 후기体)은 유지하되 전개 방식과 표현을 다르게 써주세요:

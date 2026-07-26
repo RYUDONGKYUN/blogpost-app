@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Clipboard } from "@capacitor/clipboard";
 import type { GeneratedPost, UploadedImage } from "../types";
+import { composeFullText } from "../postText";
 
 interface Props {
   post: GeneratedPost;
@@ -12,10 +13,7 @@ export default function ResultView({ post, images, onBack }: Props) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
-  const fullText = useMemo(() => {
-    const hashtags = post.keywords.map((k) => `#${k.replace(/\s+/g, "")}`).join(" ");
-    return `${post.title}\n\n${post.body}\n\n${hashtags}`;
-  }, [post]);
+  const fullText = useMemo(() => composeFullText(post), [post]);
 
   async function handleCopy() {
     setCopyError(null);

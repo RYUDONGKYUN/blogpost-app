@@ -8,8 +8,8 @@ const DEFAULT_SETTINGS: Settings = {
   model: "gemini-3.6-flash",
 };
 
-/** total entries kept across all categories, oldest dropped first */
-const HISTORY_MAX_TOTAL = 40;
+/** total saved posts kept across all categories, oldest dropped first */
+const HISTORY_MAX_TOTAL = 100;
 /** entries per category actually sent to the model as "don't repeat this" context */
 const HISTORY_PROMPT_COUNT = 5;
 
@@ -32,7 +32,14 @@ function loadAllHistory(): PostHistoryEntry[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // drop entries saved by older app versions that predate the full-post archive shape
+    return parsed.filter(
+      (entry): entry is PostHistoryEntry =>
+        typeof entry?.id === "string" &&
+        typeof entry?.body === "string" &&
+        Array.isArray(entry?.keywords),
+    );
   } catch {
     return [];
   }
@@ -43,6 +50,11 @@ export function loadRecentHistory(category: Category): PostHistoryEntry[] {
   return loadAllHistory()
     .filter((entry) => entry.category === category)
     .slice(-HISTORY_PROMPT_COUNT);
+}
+
+/** all saved posts, newest first, for the history/archive screen */
+export function loadArchive(): PostHistoryEntry[] {
+  return [...loadAllHistory()].reverse();
 }
 
 export function addHistoryEntry(entry: PostHistoryEntry): void {
