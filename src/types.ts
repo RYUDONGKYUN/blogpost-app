@@ -30,6 +30,15 @@ export interface GeneratedPost {
   body: string;
 }
 
+export interface ClarificationTurn {
+  question: string;
+  answer: string;
+}
+
+export type GenerateResult =
+  | { status: "ready"; post: GeneratedPost }
+  | { status: "needs_info"; question: string };
+
 export interface PostHistoryEntry {
   id: string;
   category: Category;

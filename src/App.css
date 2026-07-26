@@ -38,6 +38,20 @@ main {
   padding: 16px;
 }
 
+.clarification-box {
+  margin-top: 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--card-bg);
+}
+
+.clarification-box p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-h);
+}
+
 .view {
   display: flex;
   flex-direction: column;

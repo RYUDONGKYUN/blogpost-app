@@ -9,9 +9,18 @@ interface Props {
   onGenerate: () => void;
   busy: boolean;
   errorMessage: string | null;
+  /** true while a clarifying question is awaiting an answer */
+  blocked: boolean;
 }
 
-export default function ComposeView({ value, onChange, onGenerate, busy, errorMessage }: Props) {
+export default function ComposeView({
+  value,
+  onChange,
+  onGenerate,
+  busy,
+  errorMessage,
+  blocked,
+}: Props) {
   const [loadingImages, setLoadingImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { category, place, notes, images } = value;
@@ -120,7 +129,7 @@ export default function ComposeView({ value, onChange, onGenerate, busy, errorMe
         <button
           className="primary-btn"
           onClick={onGenerate}
-          disabled={busy || loadingImages || images.length === 0}
+          disabled={busy || loadingImages || images.length === 0 || blocked}
         >
           {busy ? "글 작성 중..." : "블로그 글 생성하기"}
         </button>

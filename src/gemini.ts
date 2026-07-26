@@ -1,13 +1,21 @@
-import type { ComposeInput, GeneratedPost, PostHistoryEntry, Settings } from "./types";
+import type {
+  ClarificationTurn,
+  ComposeInput,
+  GenerateResult,
+  PostHistoryEntry,
+  Settings,
+} from "./types";
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
+    status: { type: "STRING", enum: ["ready", "needs_info"] },
+    question: { type: "STRING" },
     title: { type: "STRING" },
     keywords: { type: "ARRAY", items: { type: "STRING" } },
     body: { type: "STRING" },
   },
-  required: ["title", "keywords", "body"],
+  required: ["status"],
 };
 
 /** Extracts a short "opening hook" from a generated body, used to steer future
@@ -65,7 +73,20 @@ function buildBodyRule(photoCount: number, category: ComposeInput["category"]): 
 - 과장되거나 근거 없는 효능/효과 주장은 하지 말 것.`;
 }
 
-function buildPrompt(input: ComposeInput, history: PostHistoryEntry[]): string {
+function buildClarificationSection(qa: ClarificationTurn[]): string {
+  if (qa.length === 0) return "";
+  const lines = qa.map((turn) => `- Q: ${turn.question}\n  A: ${turn.answer}`).join("\n");
+  return `\n[이미 확인한 추가 정보]
+이전에 부족한 정보를 사용자에게 질문했고, 아래처럼 답변받았습니다. 이 내용을 반영해서 이번에는 반드시 완성된 포스팅(status: "ready")으로 작성하세요:
+${lines}
+`;
+}
+
+function buildPrompt(
+  input: ComposeInput,
+  history: PostHistoryEntry[],
+  qaHistory: ClarificationTurn[],
+): string {
   const isRecipe = input.category === "레시피";
   const placeLine = input.place.trim()
     ? `${isRecipe ? "요리 이름" : "장소/지역명"}: ${input.place.trim()}`
@@ -81,24 +102,31 @@ function buildPrompt(input: ComposeInput, history: PostHistoryEntry[]): string {
 ${placeLine}
 ${notesLine}
 ${buildHistorySection(history)}
+${buildClarificationSection(qaHistory)}
 
-[제목 규칙]
+[status 필드]
+- 사진과 위 정보만으로 충분히 좋은 포스팅을 쓸 수 있으면 status="ready"로 하고 title/keywords/body를 모두 채우세요. 대부분의 경우 이렇게 하세요.
+- 정말로 핵심 정보가 없어서 그럴듯하게 추측하면 내용이 부정확해질 것 같을 때만 (예: 사진만으로는 요리/가게 이름을 전혀 알 수 없거나, 사용자가 언급했지만 사진에 안 보이는 중요한 대상이 있을 때) status="needs_info"로 하고, question 필드에 사용자에게 물어볼 질문을 하나만 한국어로 작성하세요. 이때 title/keywords/body는 비워두세요.
+- 애매하면 무리하게 질문하지 말고 사진에서 보이는 대로 자연스럽게 추측해서 "ready"로 작성하는 것을 우선하세요. 질문은 정말 필요할 때만 최소한으로.
+
+[제목 규칙] (status="ready"일 때)
 ${buildTitleRule(input)}
 
-[본문 규칙]
+[본문 규칙] (status="ready"일 때)
 ${buildBodyRule(photoCount, input.category)}
 
-[keywords 필드]
+[keywords 필드] (status="ready"일 때)
 - 본문과 별개로, 검색에 유리한 키워드 5~8개를 배열로 제공 (해시태그 # 기호 없이 단어만).
 
-JSON 스키마에 맞춰 title, keywords, body 세 필드로만 응답하세요.`;
+JSON 스키마에 맞춰 status, question, title, keywords, body 필드로 응답하세요.`;
 }
 
 export async function generatePost(
   settings: Settings,
   input: ComposeInput,
   history: PostHistoryEntry[] = [],
-): Promise<GeneratedPost> {
+  qaHistory: ClarificationTurn[] = [],
+): Promise<GenerateResult> {
   if (!settings.apiKey.trim()) {
     throw new Error("설정 화면에서 Gemini API 키를 먼저 입력해주세요.");
   }
@@ -106,7 +134,7 @@ export async function generatePost(
     throw new Error("사진을 1장 이상 업로드해주세요.");
   }
 
-  const parts: unknown[] = [{ text: buildPrompt(input, history) }];
+  const parts: unknown[] = [{ text: buildPrompt(input, history, qaHistory) }];
   for (const img of input.images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
   }
@@ -147,11 +175,28 @@ export async function generatePost(
     throw new Error("Gemini 응답에서 결과 텍스트를 찾을 수 없습니다.");
   }
 
-  const parsed = JSON.parse(text) as GeneratedPost;
+  const parsed = JSON.parse(text) as {
+    status?: string;
+    question?: string;
+    title?: string;
+    keywords?: string[];
+    body?: string;
+  };
+
+  if (parsed.status === "needs_info") {
+    if (!parsed.question?.trim()) {
+      throw new Error("Gemini가 추가 질문을 하려 했지만 질문 내용이 비어 있습니다.");
+    }
+    return { status: "needs_info", question: parsed.question.trim() };
+  }
+
   if (!parsed.title || !parsed.body || !Array.isArray(parsed.keywords)) {
     throw new Error("Gemini 응답 형식이 올바르지 않습니다.");
   }
-  return parsed;
+  return {
+    status: "ready",
+    post: { title: parsed.title, keywords: parsed.keywords, body: parsed.body },
+  };
 }
 
 interface GeminiModelInfo {
