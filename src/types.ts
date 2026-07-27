@@ -39,9 +39,15 @@ export interface ClarificationTurn {
   answer: string;
 }
 
-export type GenerateResult =
+export type GenerateResult = (
   | { status: "ready"; post: GeneratedPost }
-  | { status: "needs_info"; question: string };
+  | { status: "needs_info"; question: string }
+) & {
+  /** Set when the configured model 404'd and the app auto-picked a working
+   * one instead — the caller should persist this so future requests skip
+   * straight to it instead of re-discovering it every time. */
+  resolvedModel?: string;
+};
 
 export interface PostHistoryEntry {
   id: string;

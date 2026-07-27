@@ -52,6 +52,10 @@ export default function App() {
       const history = loadRecentHistory(composeInput.category);
       const result = await generatePost(settings, composeInput, history, qa);
 
+      if (result.resolvedModel) {
+        handleSaveSettings({ ...settings, model: result.resolvedModel });
+      }
+
       if (result.status === "needs_info") {
         setPendingQuestion(result.question);
         return;

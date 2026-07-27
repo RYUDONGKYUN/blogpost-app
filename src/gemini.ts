@@ -209,6 +209,34 @@ JSON 스키마에 맞춰 status, question, title, keywords, body 필드로 응�
  * incomplete/malformed — worth a silent retry rather than failing outright. */
 class MalformedResponseError extends Error {}
 
+/** Thrown when the configured model name 404s — usually a stale/hardcoded
+ * default that Google has since renamed or retired for this key. */
+class ModelNotFoundError extends Error {
+  model: string;
+  constructor(model: string, message: string) {
+    super(message);
+    this.model = model;
+  }
+}
+
+/** Picks a stand-in model when the configured one 404s, preferring a
+ * "flash" model (fast/cheap, matches the app's default) over whatever else
+ * this key has access to. */
+async function pickFallbackModel(apiKey: string, badModel: string): Promise<string> {
+  const models = await listAvailableModels(apiKey);
+  const usable = models.filter((m) => m !== badModel);
+  if (usable.length === 0) {
+    throw new Error(
+      "이 API 키로 사용 가능한 Gemini 모델을 찾지 못했습니다. 설정 화면에서 키가 올바른지 확인해주세요.",
+    );
+  }
+  return (
+    usable.find((m) => /flash/i.test(m) && !/flash-lite/i.test(m)) ??
+    usable.find((m) => /flash/i.test(m)) ??
+    usable[0]
+  );
+}
+
 export async function generatePost(
   settings: Settings,
   input: ComposeInput,
@@ -222,10 +250,25 @@ export async function generatePost(
     throw new Error("사진을 1장 이상 업로드해주세요.");
   }
 
+  let effectiveSettings = settings;
+  let modelFallbackTried = false;
+
   for (let attempt = 0; ; attempt++) {
     try {
-      return await requestOnce(settings, input, history, qaHistory);
+      const result = await requestOnce(effectiveSettings, input, history, qaHistory);
+      return effectiveSettings.model !== settings.model
+        ? { ...result, resolvedModel: effectiveSettings.model }
+        : result;
     } catch (e) {
+      if (e instanceof ModelNotFoundError && !modelFallbackTried) {
+        modelFallbackTried = true;
+        const fallbackModel = await pickFallbackModel(settings.apiKey, e.model);
+        effectiveSettings = { ...settings, model: fallbackModel };
+        continue;
+      }
+      if (e instanceof ModelNotFoundError) {
+        throw new Error(e.message);
+      }
       if (e instanceof MalformedResponseError && attempt < MAX_MALFORMED_RETRIES) {
         continue;
       }
@@ -293,7 +336,8 @@ async function requestOnce(
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
     if (res.status === 404) {
-      throw new Error(
+      throw new ModelNotFoundError(
+        settings.model,
         `모델 "${settings.model}"을(를) 찾을 수 없습니다. 설정 화면에서 "사용 가능한 모델 불러오기"로 현재 키가 지원하는 모델을 다시 선택해주세요.`,
       );
     }
