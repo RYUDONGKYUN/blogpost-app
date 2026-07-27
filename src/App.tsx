@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Toast } from "@capacitor/toast";
 import "./App.css";
 import SettingsView from "./components/SettingsView";
 import ComposeView from "./components/ComposeView";
@@ -44,6 +46,47 @@ export default function App() {
     setPendingQuestion(null);
     setAnswerDraft("");
   }
+
+  const goBackToMain = useCallback(() => {
+    // Only clear the in-progress draft when leaving the "new post" result
+    // flow — going back from settings/history shouldn't wipe whatever the
+    // user was mid-typing on the compose screen.
+    if (screen === "result") {
+      setResult(null);
+      resetCompose();
+    }
+    setScreen("compose");
+  }, [screen]);
+
+  // Hardware back button: from any sub-screen, return to the main compose
+  // screen (mirrors the on-screen back buttons). From the main screen,
+  // require a second press within 2s to exit — the familiar "한 번 더
+  // 누르면 종료" pattern — so a single stray back press can't quit the app.
+  useEffect(() => {
+    let doubleBackArmed = false;
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const listenerPromise = CapacitorApp.addListener("backButton", () => {
+      if (screen !== "compose") {
+        goBackToMain();
+        return;
+      }
+      if (doubleBackArmed) {
+        CapacitorApp.exitApp();
+        return;
+      }
+      doubleBackArmed = true;
+      Toast.show({ text: "뒤로가기를 한 번 더 누르면 종료됩니다", duration: "short" }).catch(() => {});
+      resetTimer = setTimeout(() => {
+        doubleBackArmed = false;
+      }, 2000);
+    });
+
+    return () => {
+      if (resetTimer) clearTimeout(resetTimer);
+      listenerPromise.then((listener) => listener.remove());
+    };
+  }, [screen, goBackToMain]);
 
   async function runGenerate(qa: ClarificationTurn[]) {
     setError(null);
@@ -151,25 +194,11 @@ export default function App() {
           </>
         )}
         {screen === "settings" && (
-          <SettingsView
-            settings={settings}
-            onSave={handleSaveSettings}
-            onClose={() => setScreen("compose")}
-          />
+          <SettingsView settings={settings} onSave={handleSaveSettings} onClose={goBackToMain} />
         )}
-        {screen === "history" && (
-          <HistoryView entries={loadArchive()} onBack={() => setScreen("compose")} />
-        )}
+        {screen === "history" && <HistoryView entries={loadArchive()} onBack={goBackToMain} />}
         {screen === "result" && result && (
-          <ResultView
-            post={result.post}
-            images={result.images}
-            onBack={() => {
-              setResult(null);
-              resetCompose();
-              setScreen("compose");
-            }}
-          />
+          <ResultView post={result.post} images={result.images} onBack={goBackToMain} />
         )}
       </main>
     </div>
