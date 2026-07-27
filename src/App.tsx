@@ -79,7 +79,9 @@ export default function App() {
       setResult({ post: result.post, images: composeInput.images });
       setScreen("result");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.");
+      const message = e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
+      setError(message);
+      window.alert(message);
     } finally {
       setBusy(false);
     }

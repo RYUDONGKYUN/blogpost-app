@@ -49,7 +49,9 @@ export default function ResultView({ post, images, onBack }: Props) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setCopyError("복사에 실패했습니다. 텍스트를 길게 눌러 직접 복사해주세요.");
+      const message = "복사에 실패했습니다. 텍스트를 길게 눌러 직접 복사해주세요.";
+      setCopyError(message);
+      window.alert(message);
     }
   }
 
