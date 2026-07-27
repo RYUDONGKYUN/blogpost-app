@@ -6,6 +6,10 @@ import type {
   Settings,
 } from "./types";
 
+/** Multi-image requests over a slow mobile connection can otherwise hang
+ * indefinitely with no feedback; abort and surface a clear error instead. */
+const REQUEST_TIMEOUT_MS = 60_000;
+
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -215,21 +219,38 @@ export async function generatePost(
     settings.model,
   )}:generateContent`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": settings.apiKey,
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.9,
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": settings.apiKey,
       },
-    }),
-  });
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+          temperature: 0.9,
+        },
+      }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error(
+        `요청이 ${REQUEST_TIMEOUT_MS / 1000}초 안에 끝나지 않아 중단했습니다. 네트워크 상태를 확인하거나 사진 수를 줄이고 다시 시도해주세요.`,
+      );
+    }
+    throw new Error(
+      "Gemini 서버에 연결하지 못했습니다 (failed to fetch). Wi-Fi/데이터 연결 상태를 확인하고 다시 시도해주세요.",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");

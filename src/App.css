@@ -221,6 +221,11 @@ textarea {
   cursor: pointer;
 }
 
+.ghost-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .error {
   color: var(--danger);
   font-size: 13px;
