@@ -19,8 +19,16 @@ const RESPONSE_SCHEMA = {
     keywords: { type: "ARRAY", items: { type: "STRING" } },
     body: { type: "STRING" },
   },
-  required: ["status"],
+  // All fields required (left as "" / [] when unused) so the model can't drop
+  // title/body/keywords on a "ready" response — that used to surface as a bare
+  // "Gemini 응답 형식이 올바르지 않습니다" with no way to tell what went wrong.
+  required: ["status", "question", "title", "keywords", "body"],
 };
+
+/** A malformed/incomplete generation is usually a one-off glitch, not a
+ * persistent problem, so it's worth silently retrying before bothering the
+ * user — unlike timeouts/network errors, which retrying won't fix any faster. */
+const MAX_MALFORMED_RETRIES = 2;
 
 /** Extracts a short "opening hook" from a generated body, used to steer future
  * generations away from repeating the same phrasing. */
@@ -197,6 +205,10 @@ ${buildBodyRule(photoCount, input.category)}
 JSON 스키마에 맞춰 status, question, title, keywords, body 필드로 응답하세요.`;
 }
 
+/** Thrown when the request succeeded but the model's JSON came back
+ * incomplete/malformed — worth a silent retry rather than failing outright. */
+class MalformedResponseError extends Error {}
+
 export async function generatePost(
   settings: Settings,
   input: ComposeInput,
@@ -210,6 +222,29 @@ export async function generatePost(
     throw new Error("사진을 1장 이상 업로드해주세요.");
   }
 
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await requestOnce(settings, input, history, qaHistory);
+    } catch (e) {
+      if (e instanceof MalformedResponseError && attempt < MAX_MALFORMED_RETRIES) {
+        continue;
+      }
+      if (e instanceof MalformedResponseError) {
+        throw new Error(
+          `${e.message} (${MAX_MALFORMED_RETRIES + 1}번 시도 모두 실패했습니다. 다시 시도해주세요.)`,
+        );
+      }
+      throw e;
+    }
+  }
+}
+
+async function requestOnce(
+  settings: Settings,
+  input: ComposeInput,
+  history: PostHistoryEntry[],
+  qaHistory: ClarificationTurn[],
+): Promise<GenerateResult> {
   const parts: unknown[] = [{ text: buildPrompt(input, history, qaHistory) }];
   for (const img of input.images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
@@ -235,6 +270,9 @@ export async function generatePost(
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
           temperature: 0.9,
+          // Leaves headroom for a full multi-section post (title/body/keywords all
+          // in one JSON blob) so a long 맛집 template doesn't get cut off mid-response.
+          maxOutputTokens: 8192,
         },
       }),
       signal: controller.signal,
@@ -263,28 +301,41 @@ export async function generatePost(
   }
 
   const data = await res.json();
+  const finishReason: string | undefined = data?.candidates?.[0]?.finishReason;
   const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
-    throw new Error("Gemini 응답에서 결과 텍스트를 찾을 수 없습니다.");
+    if (finishReason === "MAX_TOKENS") {
+      throw new MalformedResponseError(
+        "Gemini 응답이 길이 제한으로 중간에 잘렸습니다.",
+      );
+    }
+    throw new MalformedResponseError("Gemini 응답에서 결과 텍스트를 찾을 수 없습니다.");
   }
 
-  const parsed = JSON.parse(text) as {
+  let parsed: {
     status?: string;
     question?: string;
     title?: string;
     keywords?: string[];
     body?: string;
   };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new MalformedResponseError("Gemini 응답을 해석할 수 없습니다 (JSON 파싱 실패).");
+  }
 
   if (parsed.status === "needs_info") {
     if (!parsed.question?.trim()) {
-      throw new Error("Gemini가 추가 질문을 하려 했지만 질문 내용이 비어 있습니다.");
+      throw new MalformedResponseError(
+        "Gemini가 추가 질문을 하려 했지만 질문 내용이 비어 있습니다.",
+      );
     }
     return { status: "needs_info", question: parsed.question.trim() };
   }
 
-  if (!parsed.title || !parsed.body || !Array.isArray(parsed.keywords)) {
-    throw new Error("Gemini 응답 형식이 올바르지 않습니다.");
+  if (!parsed.title?.trim() || !parsed.body?.trim() || !Array.isArray(parsed.keywords) || parsed.keywords.length === 0) {
+    throw new MalformedResponseError("Gemini 응답 형식이 올바르지 않습니다.");
   }
 
   let body = parsed.body;

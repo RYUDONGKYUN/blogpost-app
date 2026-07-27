@@ -16,6 +16,20 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        // Checked-in debug keystore so every CI build is signed with the same
+        // certificate. Without this, each fresh GitHub Actions runner generates
+        // its own throwaway debug.keystore, so every new APK build gets a
+        // different signature and Android refuses to install it over the
+        // previous one — forcing an uninstall that wipes app data (settings,
+        // saved API key, history) between test builds.
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
