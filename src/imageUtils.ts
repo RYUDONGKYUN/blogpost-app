@@ -1,7 +1,10 @@
 import type { UploadedImage } from "./types";
 
-const MAX_DIMENSION = 1280;
-const JPEG_QUALITY = 0.82;
+// Kept small enough that uploading several photos over a slow mobile
+// connection doesn't stall out the Gemini request; still plenty for the
+// model to read menus/signage and describe a scene accurately.
+const MAX_DIMENSION = 1024;
+const JPEG_QUALITY = 0.72;
 const THUMBNAIL_MAX_DIMENSION = 240;
 const THUMBNAIL_JPEG_QUALITY = 0.5;
 

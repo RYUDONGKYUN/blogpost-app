@@ -6,6 +6,10 @@ import type {
   Settings,
 } from "./types";
 
+/** Multi-image requests over a slow mobile connection can otherwise hang
+ * indefinitely with no feedback; abort and surface a clear error instead. */
+const REQUEST_TIMEOUT_MS = 60_000;
+
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -15,8 +19,16 @@ const RESPONSE_SCHEMA = {
     keywords: { type: "ARRAY", items: { type: "STRING" } },
     body: { type: "STRING" },
   },
-  required: ["status"],
+  // All fields required (left as "" / [] when unused) so the model can't drop
+  // title/body/keywords on a "ready" response — that used to surface as a bare
+  // "Gemini 응답 형식이 올바르지 않습니다" with no way to tell what went wrong.
+  required: ["status", "question", "title", "keywords", "body"],
 };
+
+/** A malformed/incomplete generation is usually a one-off glitch, not a
+ * persistent problem, so it's worth silently retrying before bothering the
+ * user — unlike timeouts/network errors, which retrying won't fix any faster. */
+const MAX_MALFORMED_RETRIES = 2;
 
 /** Extracts a short "opening hook" from a generated body, used to steer future
  * generations away from repeating the same phrasing. */
@@ -193,6 +205,38 @@ ${buildBodyRule(photoCount, input.category)}
 JSON 스키마에 맞춰 status, question, title, keywords, body 필드로 응답하세요.`;
 }
 
+/** Thrown when the request succeeded but the model's JSON came back
+ * incomplete/malformed — worth a silent retry rather than failing outright. */
+class MalformedResponseError extends Error {}
+
+/** Thrown when the configured model name 404s — usually a stale/hardcoded
+ * default that Google has since renamed or retired for this key. */
+class ModelNotFoundError extends Error {
+  model: string;
+  constructor(model: string, message: string) {
+    super(message);
+    this.model = model;
+  }
+}
+
+/** Picks a stand-in model when the configured one 404s, preferring a
+ * "flash" model (fast/cheap, matches the app's default) over whatever else
+ * this key has access to. */
+async function pickFallbackModel(apiKey: string, badModel: string): Promise<string> {
+  const models = await listAvailableModels(apiKey);
+  const usable = models.filter((m) => m !== badModel);
+  if (usable.length === 0) {
+    throw new Error(
+      "이 API 키로 사용 가능한 Gemini 모델을 찾지 못했습니다. 설정 화면에서 키가 올바른지 확인해주세요.",
+    );
+  }
+  return (
+    usable.find((m) => /flash/i.test(m) && !/flash-lite/i.test(m)) ??
+    usable.find((m) => /flash/i.test(m)) ??
+    usable[0]
+  );
+}
+
 export async function generatePost(
   settings: Settings,
   input: ComposeInput,
@@ -206,6 +250,44 @@ export async function generatePost(
     throw new Error("사진을 1장 이상 업로드해주세요.");
   }
 
+  let effectiveSettings = settings;
+  let modelFallbackTried = false;
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const result = await requestOnce(effectiveSettings, input, history, qaHistory);
+      return effectiveSettings.model !== settings.model
+        ? { ...result, resolvedModel: effectiveSettings.model }
+        : result;
+    } catch (e) {
+      if (e instanceof ModelNotFoundError && !modelFallbackTried) {
+        modelFallbackTried = true;
+        const fallbackModel = await pickFallbackModel(settings.apiKey, e.model);
+        effectiveSettings = { ...settings, model: fallbackModel };
+        continue;
+      }
+      if (e instanceof ModelNotFoundError) {
+        throw new Error(e.message);
+      }
+      if (e instanceof MalformedResponseError && attempt < MAX_MALFORMED_RETRIES) {
+        continue;
+      }
+      if (e instanceof MalformedResponseError) {
+        throw new Error(
+          `${e.message} (${MAX_MALFORMED_RETRIES + 1}번 시도 모두 실패했습니다. 다시 시도해주세요.)`,
+        );
+      }
+      throw e;
+    }
+  }
+}
+
+async function requestOnce(
+  settings: Settings,
+  input: ComposeInput,
+  history: PostHistoryEntry[],
+  qaHistory: ClarificationTurn[],
+): Promise<GenerateResult> {
   const parts: unknown[] = [{ text: buildPrompt(input, history, qaHistory) }];
   for (const img of input.images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
@@ -215,26 +297,47 @@ export async function generatePost(
     settings.model,
   )}:generateContent`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": settings.apiKey,
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.9,
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": settings.apiKey,
       },
-    }),
-  });
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+          temperature: 0.9,
+          // Leaves headroom for a full multi-section post (title/body/keywords all
+          // in one JSON blob) so a long 맛집 template doesn't get cut off mid-response.
+          maxOutputTokens: 8192,
+        },
+      }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error(
+        `요청이 ${REQUEST_TIMEOUT_MS / 1000}초 안에 끝나지 않아 중단했습니다. 네트워크 상태를 확인하거나 사진 수를 줄이고 다시 시도해주세요.`,
+      );
+    }
+    throw new Error(
+      "Gemini 서버에 연결하지 못했습니다 (failed to fetch). Wi-Fi/데이터 연결 상태를 확인하고 다시 시도해주세요.",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
     if (res.status === 404) {
-      throw new Error(
+      throw new ModelNotFoundError(
+        settings.model,
         `모델 "${settings.model}"을(를) 찾을 수 없습니다. 설정 화면에서 "사용 가능한 모델 불러오기"로 현재 키가 지원하는 모델을 다시 선택해주세요.`,
       );
     }
@@ -242,28 +345,41 @@ export async function generatePost(
   }
 
   const data = await res.json();
+  const finishReason: string | undefined = data?.candidates?.[0]?.finishReason;
   const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
-    throw new Error("Gemini 응답에서 결과 텍스트를 찾을 수 없습니다.");
+    if (finishReason === "MAX_TOKENS") {
+      throw new MalformedResponseError(
+        "Gemini 응답이 길이 제한으로 중간에 잘렸습니다.",
+      );
+    }
+    throw new MalformedResponseError("Gemini 응답에서 결과 텍스트를 찾을 수 없습니다.");
   }
 
-  const parsed = JSON.parse(text) as {
+  let parsed: {
     status?: string;
     question?: string;
     title?: string;
     keywords?: string[];
     body?: string;
   };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new MalformedResponseError("Gemini 응답을 해석할 수 없습니다 (JSON 파싱 실패).");
+  }
 
   if (parsed.status === "needs_info") {
     if (!parsed.question?.trim()) {
-      throw new Error("Gemini가 추가 질문을 하려 했지만 질문 내용이 비어 있습니다.");
+      throw new MalformedResponseError(
+        "Gemini가 추가 질문을 하려 했지만 질문 내용이 비어 있습니다.",
+      );
     }
     return { status: "needs_info", question: parsed.question.trim() };
   }
 
-  if (!parsed.title || !parsed.body || !Array.isArray(parsed.keywords)) {
-    throw new Error("Gemini 응답 형식이 올바르지 않습니다.");
+  if (!parsed.title?.trim() || !parsed.body?.trim() || !Array.isArray(parsed.keywords) || parsed.keywords.length === 0) {
+    throw new MalformedResponseError("Gemini 응답 형식이 올바르지 않습니다.");
   }
 
   let body = parsed.body;

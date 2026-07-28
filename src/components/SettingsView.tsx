@@ -31,7 +31,9 @@ export default function SettingsView({ settings, onSave, onClose }: Props) {
         setModelError("이 키로 사용 가능한 모델을 찾지 못했습니다.");
       }
     } catch (e) {
-      setModelError(e instanceof Error ? e.message : "모델 목록을 불러오지 못했습니다.");
+      const message = e instanceof Error ? e.message : "모델 목록을 불러오지 못했습니다.";
+      setModelError(message);
+      window.alert(message);
     } finally {
       setLoadingModels(false);
     }

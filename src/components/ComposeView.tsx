@@ -165,6 +165,12 @@ export default function ComposeView({
           {busy ? "글 작성 중..." : "블로그 글 생성하기"}
         </button>
       </div>
+      {busy && (
+        <p className="hint">
+          사진 수와 네트워크 속도에 따라 최대 1분 정도 걸릴 수 있어요. 화면을 벗어나지 말고
+          기다려주세요.
+        </p>
+      )}
     </div>
   );
 }

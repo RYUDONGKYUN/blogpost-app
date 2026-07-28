@@ -49,7 +49,21 @@ export default function HistoryView({ entries, onBack }: Props) {
                 </div>
               </div>
 
-              {expanded && <pre className="result-box result-body">{entry.body}</pre>}
+              {expanded && (
+                <>
+                  <div className="field">
+                    <span>키워드</span>
+                    <div className="chip-row">
+                      {entry.keywords.map((k) => (
+                        <span key={k} className="chip">
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <pre className="result-box result-body">{entry.body}</pre>
+                </>
+              )}
 
               <div className="actions">
                 <button type="button" className="ghost-btn" onClick={() => handleCopy(entry)}>
