@@ -5,6 +5,11 @@
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  /* Android edge-to-edge (enforced on API 35+) draws the WebView behind the
+     status bar / gesture nav bar / display-cutout by default, so every edge
+     needs its own inset padding or content gets visually clipped there. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .app-header {
@@ -14,14 +19,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 14px 16px;
+  padding-top: calc(14px + env(safe-area-inset-top));
   background: var(--card-bg);
   border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .header-actions {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -36,6 +49,7 @@
 main {
   flex: 1;
   padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 
 .clarification-box {
