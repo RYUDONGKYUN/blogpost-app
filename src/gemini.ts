@@ -7,8 +7,17 @@ import type {
 } from "./types";
 
 /** Multi-image requests over a slow mobile connection can otherwise hang
- * indefinitely with no feedback; abort and surface a clear error instead. */
-const REQUEST_TIMEOUT_MS = 60_000;
+ * indefinitely with no feedback; abort and surface a clear error instead.
+ * Scales with photo count — a post with dozens of photos genuinely needs
+ * longer than a base fixed timeout allows (e.g. 39 photos previously
+ * timed out at a flat 60s). */
+const BASE_TIMEOUT_MS = 60_000;
+const TIMEOUT_PER_PHOTO_MS = 4_000;
+const MAX_TIMEOUT_MS = 300_000;
+
+function computeTimeoutMs(photoCount: number): number {
+  return Math.min(BASE_TIMEOUT_MS + photoCount * TIMEOUT_PER_PHOTO_MS, MAX_TIMEOUT_MS);
+}
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
@@ -297,8 +306,9 @@ async function requestOnce(
     settings.model,
   )}:generateContent`;
 
+  const timeoutMs = computeTimeoutMs(input.images.length);
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch(url, {
@@ -323,7 +333,7 @@ async function requestOnce(
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       throw new Error(
-        `요청이 ${REQUEST_TIMEOUT_MS / 1000}초 안에 끝나지 않아 중단했습니다. 네트워크 상태를 확인하거나 사진 수를 줄이고 다시 시도해주세요.`,
+        `요청이 ${Math.round(timeoutMs / 1000)}초 안에 끝나지 않아 중단했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.`,
       );
     }
     throw new Error(
