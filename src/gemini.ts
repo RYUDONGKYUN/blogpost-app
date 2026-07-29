@@ -10,10 +10,11 @@ import type {
  * indefinitely with no feedback; abort and surface a clear error instead.
  * Scales with photo count — a post with dozens of photos genuinely needs
  * longer than a base fixed timeout allows (e.g. 39 photos previously
- * timed out at a flat 60s). */
-const BASE_TIMEOUT_MS = 60_000;
+ * timed out at a flat 60s). Floor bumped to a full 5 minutes for extra
+ * safety margin even on small requests. */
+const BASE_TIMEOUT_MS = 300_000;
 const TIMEOUT_PER_PHOTO_MS = 4_000;
-const MAX_TIMEOUT_MS = 300_000;
+const MAX_TIMEOUT_MS = 600_000;
 
 function computeTimeoutMs(photoCount: number): number {
   return Math.min(BASE_TIMEOUT_MS + photoCount * TIMEOUT_PER_PHOTO_MS, MAX_TIMEOUT_MS);
