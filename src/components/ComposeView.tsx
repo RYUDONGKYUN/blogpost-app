@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import type { ComposeInput, UploadedImage } from "../types";
 import { CATEGORIES } from "../types";
-import { fileToUploadedImage } from "../imageUtils";
+import { base64ToUploadedImage, fileToUploadedImage } from "../imageUtils";
+import { GalleryPicker } from "../galleryPicker";
 
 interface Props {
   value: ComposeInput;
@@ -22,6 +24,7 @@ export default function ComposeView({
   blocked,
 }: Props) {
   const [loadingImages, setLoadingImages] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { category, place, notes, hours, mapLink, images } = value;
 
@@ -34,6 +37,33 @@ export default function ComposeView({
     } finally {
       setLoadingImages(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handlePickPhotos() {
+    setPickError(null);
+    // Native apps get the real gallery app (album browsing included) via a
+    // custom plugin; the web dev preview has no such plugin, so it falls
+    // back to the plain browser file picker instead.
+    if (!Capacitor.isNativePlatform()) {
+      fileInputRef.current?.click();
+      return;
+    }
+    setLoadingImages(true);
+    try {
+      const { images: picked } = await GalleryPicker.pickImages();
+      const newImages = await Promise.all(
+        picked.map((img) => base64ToUploadedImage(img.base64, img.mimeType, img.fileName)),
+      );
+      onChange({ ...value, images: [...images, ...newImages] });
+    } catch (e) {
+      // "취소됨" is a plain user-cancel, not worth surfacing as an error
+      const message = e instanceof Error ? e.message : String(e);
+      if (!message.includes("취소")) {
+        setPickError("사진을 불러오지 못했습니다. 다시 시도해주세요.");
+      }
+    } finally {
+      setLoadingImages(false);
     }
   }
 
@@ -127,7 +157,19 @@ export default function ComposeView({
           multiple
           onChange={(e) => handleFiles(e.target.files)}
           disabled={loadingImages}
+          style={{ display: Capacitor.isNativePlatform() ? "none" : undefined }}
         />
+        {Capacitor.isNativePlatform() && (
+          <button
+            type="button"
+            className="ghost-btn"
+            onClick={handlePickPhotos}
+            disabled={loadingImages}
+          >
+            {loadingImages ? "불러오는 중..." : "갤러리에서 선택 (앨범 탐색 가능)"}
+          </button>
+        )}
+        {pickError && <p className="error">{pickError}</p>}
         {category === "레시피" && (
           <p className="hint">
             재료 사진 → 만드는 과정 사진 → 완성 사진 순서로 올려주시면 더 정확하게 정리해줘요.
@@ -167,7 +209,7 @@ export default function ComposeView({
       </div>
       {busy && (
         <p className="hint">
-          사진 수와 네트워크 속도에 따라 최대 1분 정도 걸릴 수 있어요. 화면을 벗어나지 말고
+          사진 수와 네트워크 속도에 따라 몇 분 정도 걸릴 수 있어요. 화면을 벗어나지 말고
           기다려주세요.
         </p>
       )}

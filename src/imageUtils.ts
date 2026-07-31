@@ -46,6 +46,26 @@ export async function makeThumbnail(dataUrl: string): Promise<string> {
   return resizeToDataUrl(dataUrl, THUMBNAIL_MAX_DIMENSION, THUMBNAIL_JPEG_QUALITY);
 }
 
+/** Same resize/re-encode as fileToUploadedImage, for images that arrive as raw
+ * base64 (from the native gallery picker) instead of a browser File. */
+export async function base64ToUploadedImage(
+  base64: string,
+  mimeType: string,
+  fileName: string,
+): Promise<UploadedImage> {
+  const originalDataUrl = `data:${mimeType};base64,${base64}`;
+  const dataUrl = await resizeToDataUrl(originalDataUrl, MAX_DIMENSION, JPEG_QUALITY);
+  const resizedBase64 = dataUrl.split(",")[1];
+
+  return {
+    id: crypto.randomUUID(),
+    fileName,
+    mimeType: "image/jpeg",
+    base64: resizedBase64,
+    dataUrl,
+  };
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
