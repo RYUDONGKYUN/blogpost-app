@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import type { Settings } from "../types";
 import { listAvailableModels } from "../gemini";
 
@@ -15,6 +16,15 @@ export default function SettingsView({ settings, onSave, onClose }: Props) {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    // No web implementation (no native package to read a version from), so
+    // this silently stays null in the browser dev preview.
+    CapacitorApp.getInfo()
+      .then((info) => setAppVersion(info.version))
+      .catch(() => setAppVersion(null));
+  }, []);
 
   function handleSave() {
     onSave({ apiKey: apiKey.trim(), model: model.trim() || settings.model });
@@ -42,6 +52,7 @@ export default function SettingsView({ settings, onSave, onClose }: Props) {
   return (
     <div className="view">
       <h2>설정</h2>
+      {appVersion && <p className="hint">현재 앱 버전: v{appVersion}</p>}
 
       <label className="field">
         <span>Gemini API 키</span>
