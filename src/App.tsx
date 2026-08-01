@@ -148,6 +148,11 @@ export default function App() {
       <header className="app-header">
         <h1>블로그 포스팅 AI</h1>
         <div className="header-actions">
+          {screen !== "compose" && (
+            <button className="icon-btn" onClick={goBackToMain} aria-label="홈으로">
+              🏠
+            </button>
+          )}
           <button className="icon-btn" onClick={() => setScreen("history")} aria-label="작성 기록">
             🕘
           </button>
