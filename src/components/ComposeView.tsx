@@ -30,10 +30,15 @@ export default function ComposeView({
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    setPickError(null);
     setLoadingImages(true);
     try {
       const newImages = await Promise.all(Array.from(files).map(fileToUploadedImage));
       onChange({ ...value, images: [...images, ...newImages] });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "사진을 불러오지 못했습니다.";
+      setPickError(message);
+      window.alert(message);
     } finally {
       setLoadingImages(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -60,7 +65,9 @@ export default function ComposeView({
       // "취소됨" is a plain user-cancel, not worth surfacing as an error
       const message = e instanceof Error ? e.message : String(e);
       if (!message.includes("취소")) {
-        setPickError("사진을 불러오지 못했습니다. 다시 시도해주세요.");
+        const displayMessage = "사진을 불러오지 못했습니다. 다시 시도해주세요.";
+        setPickError(displayMessage);
+        window.alert(displayMessage);
       }
     } finally {
       setLoadingImages(false);
