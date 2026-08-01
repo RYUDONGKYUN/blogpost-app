@@ -21,6 +21,10 @@ export interface ComposeInput {
   category: Category;
   place: string;
   notes: string;
+  /** actual business name (e.g. "이모네해장국"), distinct from the region in
+   * `place` — used so the model refers to the shop by its real name instead
+   * of guessing one from the photos */
+  businessName: string;
   /** business hours, shown for 맛집 posts in a quote-style info block */
   hours: string;
   /** Naver Map share link, shown for 맛집 posts in a quote-style info block */

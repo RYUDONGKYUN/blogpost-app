@@ -17,6 +17,7 @@ const EMPTY_COMPOSE: ComposeInput = {
   category: "맛집",
   place: "",
   notes: "",
+  businessName: "",
   hours: "",
   mapLink: "",
   images: [],

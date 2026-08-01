@@ -69,7 +69,7 @@ function buildTitleRule(input: ComposeInput): string {
   }
   return `- 형식: "[지역/장소 ${input.category}] 나머지 제목" 처럼 대괄호로 시작.
 - 지역명을 모르면 대괄호 안에 카테고리만 넣거나 사진 분위기에 맞는 짧은 수식어를 넣기.
-- 뒤에는 사람들이 클릭하고 싶어지는 친근하고 수다스러운 "주저리주저리" 느낌의 문구.`;
+- 뒤에는 사람들이 클릭하고 싶어지는 친근하고 수다스러운 "주저리주저리" 느낌의 문구. 가게 상호명을 알고 있으면 이 부분에 자연스럽게 넣어도 좋음 (지어내지 말고 정확한 이름만).`;
 }
 
 function buildBodyRule(photoCount: number, category: ComposeInput["category"]): string {
@@ -154,8 +154,9 @@ function insertDeterministicBoxes(body: string, input: ComposeInput): string {
     result = result.replace(/[ \t]*\[운영시간정보\][ \t]*\n?/g, "");
   }
 
-  if (input.place.trim() || input.mapLink.trim()) {
+  if (input.businessName.trim() || input.place.trim() || input.mapLink.trim()) {
     const lines = ["※지도와 주차팁※"];
+    if (input.businessName.trim()) lines.push(`🏪 ${input.businessName.trim()}`);
     if (input.place.trim()) lines.push(`📍 ${input.place.trim()}`);
     if (input.mapLink.trim()) lines.push(`🔗 네이버지도 : ${input.mapLink.trim()}`);
     result = result.replace(/\[지도정보\]/g, lines.join("\n"));
@@ -185,6 +186,9 @@ function buildPrompt(
   const placeLine = input.place.trim()
     ? `${isRecipe ? "요리 이름" : "장소/지역명"}: ${input.place.trim()}`
     : `${isRecipe ? "요리 이름" : "장소/지역명"}: (알 수 없음 - 사진을 보고 자연스럽게 유추)`;
+  const businessNameLine = input.businessName.trim()
+    ? `가게 상호명(정확한 이름, 반드시 이 표기 그대로 사용하고 다른 이름을 지어내지 말 것): ${input.businessName.trim()}`
+    : "";
   const notesLine = input.notes.trim()
     ? `참고할 추가 정보(사용자가 직접 입력): ${input.notes.trim()}`
     : "";
@@ -194,6 +198,7 @@ function buildPrompt(
 사용자가 업로드한 사진 ${photoCount}장을 보고, 그 사진들에 어울리는 "${input.category}" 카테고리의 블로그 포스팅을 작성하세요.
 
 ${placeLine}
+${businessNameLine}
 ${notesLine}
 ${buildHistorySection(history)}
 ${buildClarificationSection(qaHistory)}

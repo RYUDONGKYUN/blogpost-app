@@ -26,7 +26,7 @@ export default function ComposeView({
   const [loadingImages, setLoadingImages] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { category, place, notes, hours, mapLink, images } = value;
+  const { category, place, notes, businessName, hours, mapLink, images } = value;
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -105,6 +105,20 @@ export default function ComposeView({
 
       {category === "맛집" && (
         <>
+          <label className="field">
+            <span>가게 상호명 (선택)</span>
+            <input
+              type="text"
+              value={businessName}
+              onChange={(e) => onChange({ ...value, businessName: e.target.value })}
+              placeholder="예: 이모네해장국"
+            />
+            <p className="hint">
+              장소/지역명과 별개로 정확한 상호명을 입력하면, AI가 이름을 지어내지 않고 이
+              이름 그대로 본문과 정보 박스에 씁니다.
+            </p>
+          </label>
+
           <label className="field">
             <span>영업시간 (선택)</span>
             <textarea
