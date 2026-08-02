@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import type { ComposeInput, UploadedImage } from "../types";
 import { CATEGORIES } from "../types";
-import { base64ToUploadedImage, fileToUploadedImage } from "../imageUtils";
+import { fileToUploadedImage, nativeImageToUploadedImage } from "../imageUtils";
 import { GalleryPicker } from "../galleryPicker";
 
 interface Props {
@@ -57,8 +57,9 @@ export default function ComposeView({
     setLoadingImages(true);
     try {
       const { images: picked } = await GalleryPicker.pickImages();
-      const newImages = await Promise.all(
-        picked.map((img) => base64ToUploadedImage(img.base64, img.mimeType, img.fileName)),
+      // Native side already downscaled/compressed these — no canvas re-encode needed.
+      const newImages = picked.map((img) =>
+        nativeImageToUploadedImage(img.base64, img.mimeType, img.fileName),
       );
       onChange({ ...value, images: [...images, ...newImages] });
     } catch (e) {

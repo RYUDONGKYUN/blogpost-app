@@ -47,7 +47,8 @@ export async function makeThumbnail(dataUrl: string): Promise<string> {
 }
 
 /** Same resize/re-encode as fileToUploadedImage, for images that arrive as raw
- * base64 (from the native gallery picker) instead of a browser File. */
+ * base64 (e.g. pasted or from a source that hasn't already been sized) instead
+ * of a browser File. */
 export async function base64ToUploadedImage(
   base64: string,
   mimeType: string,
@@ -63,6 +64,25 @@ export async function base64ToUploadedImage(
     mimeType: "image/jpeg",
     base64: resizedBase64,
     dataUrl,
+  };
+}
+
+/** Wraps an image that arrives already downscaled/compressed — the native
+ * gallery picker does this decode+resize+JPEG-encode itself (see
+ * GalleryPickerPlugin.java), so re-running it here through canvas would just
+ * decode and re-encode the same JPEG a second time for no benefit, which was
+ * a real chunk of why picking many photos felt slow. */
+export function nativeImageToUploadedImage(
+  base64: string,
+  mimeType: string,
+  fileName: string,
+): UploadedImage {
+  return {
+    id: crypto.randomUUID(),
+    fileName,
+    mimeType,
+    base64,
+    dataUrl: `data:${mimeType};base64,${base64}`,
   };
 }
 

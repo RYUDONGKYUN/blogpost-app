@@ -19,6 +19,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Launches the real gallery app (ACTION_GET_CONTENT) instead of the flat
@@ -72,24 +76,38 @@ public class GalleryPickerPlugin extends Plugin {
             return;
         }
 
-        // Decoding/downscaling dozens of photos synchronously on the UI thread
-        // is what caused the app to appear stuck at "불러오는 중" — move it off
-        // the main thread so the app stays responsive while it works.
+        // Decoding/downscaling dozens of photos synchronously (and one at a
+        // time) is what caused the app to appear stuck/slow at "불러오는 중" —
+        // move it off the main thread and fan it out across worker threads so
+        // a large selection decodes concurrently instead of serially.
         new Thread(() -> processUris(call, uris)).start();
     }
 
     private void processUris(PluginCall call, List<Uri> uris) {
-        JSArray images = new JSArray();
-        for (Uri uri : uris) {
-            try {
-                String base64 = decodeDownscaledJpegBase64(uri);
-                if (base64 == null) continue;
+        int threadCount = Math.max(2, Math.min(uris.size(), Runtime.getRuntime().availableProcessors()));
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
+        List<Future<JSObject>> futures = new ArrayList<>();
+        for (int i = 0; i < uris.size(); i++) {
+            final Uri uri = uris.get(i);
+            final int index = i;
+            futures.add(executor.submit((Callable<JSObject>) () -> {
+                String base64 = decodeDownscaledJpegBase64(uri);
+                if (base64 == null) return null;
                 JSObject image = new JSObject();
                 image.put("base64", base64);
                 image.put("mimeType", "image/jpeg");
-                image.put("fileName", "gallery_" + System.currentTimeMillis() + ".jpg");
-                images.put(image);
+                image.put("fileName", "gallery_" + index + ".jpg");
+                return image;
+            }));
+        }
+        executor.shutdown();
+
+        JSArray images = new JSArray();
+        for (Future<JSObject> future : futures) {
+            try {
+                JSObject image = future.get();
+                if (image != null) images.put(image);
             } catch (Exception e) {
                 // skip unreadable image, keep the rest of the selection usable
             }
