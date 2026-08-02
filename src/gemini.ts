@@ -331,9 +331,11 @@ async function requestOnce(
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
           temperature: 0.9,
-          // Leaves headroom for a full multi-section post (title/body/keywords all
-          // in one JSON blob) so a long 맛집 template doesn't get cut off mid-response.
-          maxOutputTokens: 8192,
+          // The full 맛집 template (8 sections) plus 12-18 keywords can run
+          // close to what 8192 allowed, causing MAX_TOKENS truncation that
+          // retrying doesn't fix (the same content needs the same budget
+          // every attempt). Doubled for real headroom.
+          maxOutputTokens: 16384,
         },
       }),
       signal: controller.signal,
