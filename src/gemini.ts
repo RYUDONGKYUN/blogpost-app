@@ -108,7 +108,6 @@ function buildBodyRule(photoCount: number, category: ComposeInput["category"]): 
   1) "오늘의 총평! 재방문의사 있음~~" 또는 "오늘의 총평! 재방문의사 없음~~" 처럼, 실제 후기 내용과 일치하는 재방문 의향을 캐주얼하게 밝히는 한 줄.
   2) 왜 그렇게 느꼈는지 2~3줄로 편하게 설명 (다른 곳과 비교하는 등 자연스러운 비유, "~~"나 "ㅎㅎ" 같은 말투를 섞어도 좋음).
   3) 빈 줄 하나, 그 다음 "오늘의 레고블럭 N개~~" 한 줄. N은 위 총평 내용과 반드시 일치해야 함: 1개=재방문 의사 없음/아쉬움 많음, 2개=평범함, 3개=만족스러움/재방문 가능, 4개=대만족/추천, 4.5개=거의 완벽, 5개=인생 맛집. (4.5 외에는 소수점 쓰지 말 것)
-  4) 바로 다음 줄부터 "사진 설명을 입력하세요." 라는 줄을 N을 반올림한 정수 횟수만큼 한 줄씩 반복해서 넣기 (예: 레고블럭 3개면 3줄, 4.5개면 5줄).
 
 위 순서(0→1→2→5→메뉴판→운영시간정보→지도정보→7)를 그대로 지키고, 번호가 0,1,2,5,7로 중간에 비는 것도 의도된 것이니 3,4,6은 만들지 마세요.
 
@@ -297,16 +296,8 @@ function validateGeneratedPost(
       issues.push(`[지도정보] 마커가 본문에 없습니다 — 직접 텍스트로 쓰지 말고 이 마커를 정확히 한 번 넣으세요.`);
     }
 
-    const legoMatch = post.body.match(/레고블럭\s*(\d+(?:\.\d+)?)\s*개/);
-    if (!legoMatch) {
+    if (!/레고블럭\s*\d+(?:\.\d+)?\s*개/.test(post.body)) {
       issues.push(`"오늘의 레고블럭 N개~~" 줄을 찾을 수 없습니다 — 총평 섹션에 반드시 포함하세요.`);
-    } else {
-      const rating = parseFloat(legoMatch[1]);
-      const expectedCaptions = Math.round(rating);
-      const captionCount = (post.body.match(/사진 설명을 입력하세요\./g) ?? []).length;
-      if (captionCount !== expectedCaptions) {
-        issues.push(`레고블럭 ${rating}개면 "사진 설명을 입력하세요." 줄이 ${expectedCaptions}개 있어야 하는데 ${captionCount}개입니다.`);
-      }
     }
   }
 
