@@ -177,10 +177,19 @@ ${lines}
 `;
 }
 
+function buildCorrectionSection(issues: string[]): string {
+  if (issues.length === 0) return "";
+  return `\n[수정 필요 사항 — 반드시 고칠 것]
+직전에 작성한 초안을 자동으로 점검했더니 아래 문제가 발견됐습니다. 나머지 내용과 톤은 최대한 그대로 유지하면서, 이 문제들만 정확히 고쳐서 완성된 포스팅을 다시 작성하세요:
+${issues.map((issue) => `- ${issue}`).join("\n")}
+`;
+}
+
 function buildPrompt(
   input: ComposeInput,
   history: PostHistoryEntry[],
   qaHistory: ClarificationTurn[],
+  correctionIssues: string[] = [],
 ): string {
   const isRecipe = input.category === "레시피";
   const placeLine = input.place.trim()
@@ -201,6 +210,7 @@ ${placeLine}
 ${businessNameLine}
 ${notesLine}
 ${buildHistorySection(history)}
+${buildCorrectionSection(correctionIssues)}
 ${buildClarificationSection(qaHistory)}
 
 [status 필드]
@@ -236,6 +246,73 @@ class ModelNotFoundError extends Error {
   }
 }
 
+/** How many times to send a draft back to the model for a correction pass
+ * when validateGeneratedPost finds a mechanical rule violation. One retry
+ * catches the common case without doubling latency/cost on every request. */
+const MAX_VALIDATION_RETRIES = 1;
+
+/** Checks a draft against the mechanical rules the prompt asked for —
+ * things a model can plausibly get wrong despite clear instructions (miscount
+ * a photo marker, drop a required marker, ignore the keyword count) — so
+ * those get one automatic correction pass instead of reaching the user broken.
+ * Deliberately narrow: only checks rules that are objectively verifiable in
+ * code, not subjective writing quality. */
+function validateGeneratedPost(
+  post: { title: string; keywords: string[]; body: string },
+  input: ComposeInput,
+): string[] {
+  const issues: string[] = [];
+  const photoCount = input.images.length;
+
+  const markerNumbers = [...post.body.matchAll(/\[사진(\d+)\]/g)].map((m) => Number(m[1]));
+  const expected = Array.from({ length: photoCount }, (_, i) => i + 1);
+  const missing = expected.filter((n) => !markerNumbers.includes(n));
+  const outOfRange = [...new Set(markerNumbers.filter((n) => n < 1 || n > photoCount))];
+  const seen = new Set<number>();
+  const duplicated = new Set<number>();
+  for (const n of markerNumbers) {
+    if (seen.has(n)) duplicated.add(n);
+    seen.add(n);
+  }
+
+  if (missing.length > 0) {
+    issues.push(`사진 마커 [사진N]이 빠짐: ${missing.map((n) => `[사진${n}]`).join(", ")} — 본문 어딘가에 정확히 한 번씩 추가하세요.`);
+  }
+  if (duplicated.size > 0) {
+    issues.push(`사진 마커가 중복 사용됨: ${[...duplicated].map((n) => `[사진${n}]`).join(", ")} — 각 번호는 한 번씩만 쓰세요.`);
+  }
+  if (outOfRange.length > 0) {
+    issues.push(`실제 업로드된 사진(총 ${photoCount}장) 범위를 벗어난 마커 사용됨: ${outOfRange.map((n) => `[사진${n}]`).join(", ")} — 존재하지 않는 번호입니다.`);
+  }
+
+  if (post.keywords.length < 12 || post.keywords.length > 18) {
+    issues.push(`keywords가 ${post.keywords.length}개인데 12~18개 범위를 지키지 않았습니다.`);
+  }
+
+  if (input.category === "맛집") {
+    if (!/\[운영시간정보\]/.test(post.body)) {
+      issues.push(`[운영시간정보] 마커가 본문에 없습니다 — 직접 텍스트로 쓰지 말고 이 마커를 정확히 한 번 넣으세요.`);
+    }
+    if (!/\[지도정보\]/.test(post.body)) {
+      issues.push(`[지도정보] 마커가 본문에 없습니다 — 직접 텍스트로 쓰지 말고 이 마커를 정확히 한 번 넣으세요.`);
+    }
+
+    const legoMatch = post.body.match(/레고블럭\s*(\d+(?:\.\d+)?)\s*개/);
+    if (!legoMatch) {
+      issues.push(`"오늘의 레고블럭 N개~~" 줄을 찾을 수 없습니다 — 총평 섹션에 반드시 포함하세요.`);
+    } else {
+      const rating = parseFloat(legoMatch[1]);
+      const expectedCaptions = Math.round(rating);
+      const captionCount = (post.body.match(/사진 설명을 입력하세요\./g) ?? []).length;
+      if (captionCount !== expectedCaptions) {
+        issues.push(`레고블럭 ${rating}개면 "사진 설명을 입력하세요." 줄이 ${expectedCaptions}개 있어야 하는데 ${captionCount}개입니다.`);
+      }
+    }
+  }
+
+  return issues;
+}
+
 /** Picks a stand-in model when the configured one 404s, preferring a
  * "flash" model (fast/cheap, matches the app's default) over whatever else
  * this key has access to. */
@@ -269,10 +346,36 @@ export async function generatePost(
 
   let effectiveSettings = settings;
   let modelFallbackTried = false;
+  let correctionIssues: string[] = [];
+  let validationRetries = 0;
 
   for (let attempt = 0; ; attempt++) {
     try {
-      const result = await requestOnce(effectiveSettings, input, history, qaHistory);
+      const result = await requestOnce(effectiveSettings, input, history, qaHistory, correctionIssues);
+
+      // Self-check pass: a "ready" draft gets validated against the
+      // mechanical rules the prompt asked for, and — if something's off and
+      // there's a retry left — sent back with exactly what to fix, instead
+      // of handing the user a post with a missing photo marker or a
+      // rating/caption-count mismatch.
+      if (result.status === "ready") {
+        const issues = validateGeneratedPost(result.post, input);
+        if (issues.length > 0 && validationRetries < MAX_VALIDATION_RETRIES) {
+          validationRetries++;
+          correctionIssues = issues;
+          continue;
+        }
+
+        let body = result.post.body;
+        if (input.category === "맛집") {
+          body = `${insertDeterministicBoxes(body, input)}\n\n${LEGO_RATING_LEGEND}`;
+        }
+        const finalResult: GenerateResult = { status: "ready", post: { ...result.post, body } };
+        return effectiveSettings.model !== settings.model
+          ? { ...finalResult, resolvedModel: effectiveSettings.model }
+          : finalResult;
+      }
+
       return effectiveSettings.model !== settings.model
         ? { ...result, resolvedModel: effectiveSettings.model }
         : result;
@@ -304,8 +407,9 @@ async function requestOnce(
   input: ComposeInput,
   history: PostHistoryEntry[],
   qaHistory: ClarificationTurn[],
+  correctionIssues: string[] = [],
 ): Promise<GenerateResult> {
-  const parts: unknown[] = [{ text: buildPrompt(input, history, qaHistory) }];
+  const parts: unknown[] = [{ text: buildPrompt(input, history, qaHistory, correctionIssues) }];
   for (const img of input.images) {
     parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
   }
@@ -402,14 +506,13 @@ async function requestOnce(
     throw new MalformedResponseError("Gemini 응답 형식이 올바르지 않습니다.");
   }
 
-  let body = parsed.body;
-  if (input.category === "맛집") {
-    body = `${insertDeterministicBoxes(body, input)}\n\n${LEGO_RATING_LEGEND}`;
-  }
-
+  // Deterministic box substitution happens later in generatePost, only once
+  // the draft has passed (or exhausted) validation — doing it here would
+  // mean validating already-substituted text instead of the model's own
+  // [운영시간정보]/[지도정보] marker usage.
   return {
     status: "ready",
-    post: { title: parsed.title, keywords: parsed.keywords, body },
+    post: { title: parsed.title, keywords: parsed.keywords, body: parsed.body },
   };
 }
 
