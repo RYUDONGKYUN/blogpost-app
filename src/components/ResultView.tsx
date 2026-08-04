@@ -138,10 +138,20 @@ export default function ResultView({ post, images, onBack }: Props) {
   return (
     <div className="view">
       <h2>완성된 포스팅</h2>
-      <p className="hint">
-        단계 {stepIndex + 1} / {steps.length} — 순서대로 복사하고, 네이버 에디터에 바로
-        붙여넣으면서 진행하세요.
-      </p>
+      <div>
+        <div className="step-progress">
+          {steps.map((_, i) => (
+            <span
+              key={i}
+              className={i < stepIndex ? "step-done" : i === stepIndex ? "step-current" : ""}
+            />
+          ))}
+        </div>
+        <p className="step-label">
+          단계 {stepIndex + 1} / {steps.length} — 순서대로 복사하고, 네이버 에디터에 바로
+          붙여넣으면서 진행하세요.
+        </p>
+      </div>
 
       {step.kind !== "photo" && (
         <div className="field">

@@ -188,7 +188,13 @@ export default function ComposeView({
             onClick={handlePickPhotos}
             disabled={loadingImages}
           >
-            {loadingImages ? "불러오는 중..." : "갤러리에서 선택 (앨범 탐색 가능)"}
+            {loadingImages ? (
+              <>
+                <span className="spinner" /> 불러오는 중...
+              </>
+            ) : (
+              "갤러리에서 선택 (앨범 탐색 가능)"
+            )}
           </button>
         )}
         {pickError && <p className="error">{pickError}</p>}
@@ -226,7 +232,13 @@ export default function ComposeView({
           onClick={onGenerate}
           disabled={busy || loadingImages || images.length === 0 || blocked}
         >
-          {busy ? "글 작성 중..." : "블로그 글 생성하기"}
+          {busy ? (
+            <>
+              <span className="spinner" /> 글 작성 중...
+            </>
+          ) : (
+            "블로그 글 생성하기"
+          )}
         </button>
       </div>
       {busy && (

@@ -27,7 +27,10 @@ export default function HistoryView({ entries, onBack }: Props) {
       <h2>작성 기록</h2>
 
       {entries.length === 0 && (
-        <p className="hint">아직 저장된 포스팅이 없습니다. 글을 생성하면 여기에 쌓여요.</p>
+        <div className="empty-state">
+          <span className="empty-state-icon">🗒️</span>
+          <p>아직 저장된 포스팅이 없습니다. 글을 생성하면 여기에 쌓여요.</p>
+        </div>
       )}
 
       <div className="history-list">
@@ -39,7 +42,11 @@ export default function HistoryView({ entries, onBack }: Props) {
                 className="history-summary"
                 onClick={() => setExpandedId(expanded ? null : entry.id)}
               >
-                {entry.thumbnail && <img src={entry.thumbnail} className="history-thumb" alt="" />}
+                {entry.thumbnail ? (
+                  <img src={entry.thumbnail} className="history-thumb" alt="" />
+                ) : (
+                  <span className="history-thumb-placeholder">📝</span>
+                )}
                 <div className="history-info">
                   <span className="chip">{entry.category}</span>
                   <strong>{entry.title}</strong>

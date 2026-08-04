@@ -92,7 +92,13 @@ export default function SettingsView({ settings, onSave, onClose }: Props) {
           onClick={handleLoadModels}
           disabled={loadingModels || !apiKey.trim()}
         >
-          {loadingModels ? "불러오는 중..." : "사용 가능한 모델 불러오기"}
+          {loadingModels ? (
+            <>
+              <span className="spinner" /> 불러오는 중...
+            </>
+          ) : (
+            "사용 가능한 모델 불러오기"
+          )}
         </button>
         <p className="hint">
           구글이 모델 이름을 바꾸거나 새 버전을 내놓아도, 이 버튼으로 지금 이 키가 실제 지원하는
