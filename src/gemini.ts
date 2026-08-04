@@ -287,6 +287,20 @@ function validateGeneratedPost(
   if (post.keywords.length < 12 || post.keywords.length > 18) {
     issues.push(`keywords가 ${post.keywords.length}개인데 12~18개 범위를 지키지 않았습니다.`);
   }
+  const dupKeywords = [...new Set(
+    post.keywords.filter((k, i) => post.keywords.indexOf(k) !== i),
+  )];
+  if (dupKeywords.length > 0) {
+    issues.push(`keywords에 중복된 단어가 있습니다: ${dupKeywords.join(", ")} — 서로 다른 키워드로 교체하세요.`);
+  }
+
+  if (!post.title.trim().startsWith("[")) {
+    issues.push(`제목이 "["로 시작하지 않습니다 — "[지역/장소 ${input.category}]" 형식의 대괄호로 시작해야 합니다.`);
+  }
+
+  if (/→/.test(post.body)) {
+    issues.push(`본문에 "→" 문자가 포함되어 있습니다 — 이건 지시사항 설명에만 쓰는 기호인데, 지시사항 문장이 실수로 본문에 그대로 복사된 것 같습니다. 실제 후기 내용으로 바꿔쓰세요.`);
+  }
 
   if (input.category === "맛집") {
     if (!/\[운영시간정보\]/.test(post.body)) {
@@ -298,6 +312,15 @@ function validateGeneratedPost(
 
     if (!/레고블럭\s*\d+(?:\.\d+)?\s*개/.test(post.body)) {
       issues.push(`"오늘의 레고블럭 N개~~" 줄을 찾을 수 없습니다 — 총평 섹션에 반드시 포함하세요.`);
+    }
+  }
+
+  if (input.category === "레시피") {
+    if (!/재료/.test(post.body)) {
+      issues.push(`"재료" 소제목을 찾을 수 없습니다 — 본문에 반드시 포함하세요.`);
+    }
+    if (!/만드는\s*순서/.test(post.body)) {
+      issues.push(`"만드는 순서" 소제목을 찾을 수 없습니다 — 본문에 반드시 포함하세요.`);
     }
   }
 
