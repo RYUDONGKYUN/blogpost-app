@@ -53,6 +53,15 @@ export type GenerateResult = (
   resolvedModel?: string;
 };
 
+export interface ReplyInput {
+  /** link to the original post, best-effort read via Gemini's URL-context
+   * tool when supported — never required, since that fetch can fail */
+  postLink: string;
+  /** manual fallback context in case the link can't be fetched */
+  postContext: string;
+  comment: string;
+}
+
 export interface PostHistoryEntry {
   id: string;
   category: Category;

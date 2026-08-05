@@ -6,12 +6,14 @@ import SettingsView from "./components/SettingsView";
 import ComposeView from "./components/ComposeView";
 import ResultView from "./components/ResultView";
 import HistoryView from "./components/HistoryView";
+import ReplyView from "./components/ReplyView";
 import { addHistoryEntry, loadArchive, loadRecentHistory, loadSettings, saveSettings } from "./storage";
 import { generatePost } from "./gemini";
 import { makeThumbnail } from "./imageUtils";
 import type { ClarificationTurn, ComposeInput, GeneratedPost, Settings, UploadedImage } from "./types";
 
-type Screen = "compose" | "settings" | "result" | "history";
+type Tab = "post" | "reply";
+type PostScreen = "compose" | "result" | "history";
 
 const EMPTY_COMPOSE: ComposeInput = {
   category: "맛집",
@@ -25,7 +27,9 @@ const EMPTY_COMPOSE: ComposeInput = {
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings());
-  const [screen, setScreen] = useState<Screen>("compose");
+  const [activeTab, setActiveTab] = useState<Tab>("post");
+  const [postScreen, setPostScreen] = useState<PostScreen>("compose");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [composeInput, setComposeInput] = useState<ComposeInput>(EMPTY_COMPOSE);
@@ -50,26 +54,36 @@ export default function App() {
 
   const goBackToMain = useCallback(() => {
     // Only clear the in-progress draft when leaving the "new post" result
-    // flow — going back from settings/history shouldn't wipe whatever the
-    // user was mid-typing on the compose screen.
-    if (screen === "result") {
+    // flow — going back from history shouldn't wipe whatever the user was
+    // mid-typing on the compose screen.
+    if (postScreen === "result") {
       setResult(null);
       resetCompose();
     }
-    setScreen("compose");
-  }, [screen]);
+    setPostScreen("compose");
+  }, [postScreen]);
 
-  // Hardware back button: from any sub-screen, return to the main compose
-  // screen (mirrors the on-screen back buttons). From the main screen,
-  // require a second press within 2s to exit — the familiar "한 번 더
-  // 누르면 종료" pattern — so a single stray back press can't quit the app.
+  // Hardware back button: settings (an overlay reachable from either tab)
+  // closes first; then sub-screens return to the post tab's compose screen;
+  // then the reply tab falls back to the post tab. Only from the post tab's
+  // compose screen does back require a second press within 2s to exit — the
+  // familiar "한 번 더 누르면 종료" pattern — so a stray back press can't
+  // quit the app from deep in either flow.
   useEffect(() => {
     let doubleBackArmed = false;
     let resetTimer: ReturnType<typeof setTimeout> | undefined;
 
     const listenerPromise = CapacitorApp.addListener("backButton", () => {
-      if (screen !== "compose") {
+      if (settingsOpen) {
+        setSettingsOpen(false);
+        return;
+      }
+      if (activeTab === "post" && postScreen !== "compose") {
         goBackToMain();
+        return;
+      }
+      if (activeTab === "reply") {
+        setActiveTab("post");
         return;
       }
       if (doubleBackArmed) {
@@ -87,7 +101,7 @@ export default function App() {
       if (resetTimer) clearTimeout(resetTimer);
       listenerPromise.then((listener) => listener.remove());
     };
-  }, [screen, goBackToMain]);
+  }, [settingsOpen, activeTab, postScreen, goBackToMain]);
 
   async function runGenerate(qa: ClarificationTurn[]) {
     setError(null);
@@ -121,7 +135,7 @@ export default function App() {
         createdAt: Date.now(),
       });
       setResult({ post: result.post, images: composeInput.images });
-      setScreen("result");
+      setPostScreen("result");
     } catch (e) {
       const message = e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
       setError(message);
@@ -148,63 +162,97 @@ export default function App() {
       <header className="app-header">
         <h1>블로그 포스팅 AI</h1>
         <div className="header-actions">
-          {screen !== "compose" && (
+          {activeTab === "post" && postScreen !== "compose" && (
             <button className="icon-btn" onClick={goBackToMain} aria-label="홈으로">
               🏠
             </button>
           )}
-          <button className="icon-btn" onClick={() => setScreen("history")} aria-label="작성 기록">
-            🕘
-          </button>
-          <button className="icon-btn" onClick={() => setScreen("settings")} aria-label="설정">
+          {activeTab === "post" && (
+            <button
+              className="icon-btn"
+              onClick={() => setPostScreen("history")}
+              aria-label="작성 기록"
+            >
+              🕘
+            </button>
+          )}
+          <button className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="설정">
             ⚙
           </button>
         </div>
       </header>
 
+      <nav className="tab-bar">
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === "post" ? "tab-btn-active" : ""}`}
+          onClick={() => setActiveTab("post")}
+        >
+          📝 포스팅 작성
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === "reply" ? "tab-btn-active" : ""}`}
+          onClick={() => setActiveTab("reply")}
+        >
+          💬 댓글 답변
+        </button>
+      </nav>
+
       <main>
-        {screen === "compose" && (
+        {settingsOpen ? (
+          <SettingsView
+            settings={settings}
+            onSave={handleSaveSettings}
+            onClose={() => setSettingsOpen(false)}
+          />
+        ) : activeTab === "reply" ? (
+          <ReplyView settings={settings} />
+        ) : (
           <>
-            <ComposeView
-              value={composeInput}
-              onChange={setComposeInput}
-              onGenerate={handleGenerate}
-              busy={busy}
-              errorMessage={error}
-              blocked={!!pendingQuestion}
-            />
-            {pendingQuestion && (
-              <div className="view clarification-box">
-                <p>
-                  <strong>글을 쓰기 전에 하나만 확인할게요:</strong>
-                  <br />
-                  {pendingQuestion}
-                </p>
-                <textarea
-                  value={answerDraft}
-                  onChange={(e) => setAnswerDraft(e.target.value)}
-                  rows={2}
-                  placeholder="답변을 입력하세요"
+            {postScreen === "compose" && (
+              <>
+                <ComposeView
+                  value={composeInput}
+                  onChange={setComposeInput}
+                  onGenerate={handleGenerate}
+                  busy={busy}
+                  errorMessage={error}
+                  blocked={!!pendingQuestion}
                 />
-                <div className="actions">
-                  <button
-                    className="primary-btn"
-                    onClick={handleAnswerSubmit}
-                    disabled={busy || !answerDraft.trim()}
-                  >
-                    {busy ? "다시 작성 중..." : "답변하고 계속 작성하기"}
-                  </button>
-                </div>
-              </div>
+                {pendingQuestion && (
+                  <div className="view clarification-box">
+                    <p>
+                      <strong>글을 쓰기 전에 하나만 확인할게요:</strong>
+                      <br />
+                      {pendingQuestion}
+                    </p>
+                    <textarea
+                      value={answerDraft}
+                      onChange={(e) => setAnswerDraft(e.target.value)}
+                      rows={2}
+                      placeholder="답변을 입력하세요"
+                    />
+                    <div className="actions">
+                      <button
+                        className="primary-btn"
+                        onClick={handleAnswerSubmit}
+                        disabled={busy || !answerDraft.trim()}
+                      >
+                        {busy ? "다시 작성 중..." : "답변하고 계속 작성하기"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {postScreen === "history" && (
+              <HistoryView entries={loadArchive()} onBack={goBackToMain} />
+            )}
+            {postScreen === "result" && result && (
+              <ResultView post={result.post} images={result.images} onBack={goBackToMain} />
             )}
           </>
-        )}
-        {screen === "settings" && (
-          <SettingsView settings={settings} onSave={handleSaveSettings} onClose={goBackToMain} />
-        )}
-        {screen === "history" && <HistoryView entries={loadArchive()} onBack={goBackToMain} />}
-        {screen === "result" && result && (
-          <ResultView post={result.post} images={result.images} onBack={goBackToMain} />
         )}
       </main>
     </div>

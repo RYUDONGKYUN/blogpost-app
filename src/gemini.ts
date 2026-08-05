@@ -3,6 +3,7 @@ import type {
   ComposeInput,
   GenerateResult,
   PostHistoryEntry,
+  ReplyInput,
   Settings,
 } from "./types";
 
@@ -556,4 +557,113 @@ export async function listAvailableModels(apiKey: string): Promise<string[]> {
   return models
     .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
     .map((m) => m.name.replace(/^models\//, ""));
+}
+
+/** Writes a short reply to a comment left on one of the user's own posts.
+ * When a post link is given, tries Gemini's url_context tool so the reply
+ * can reference the actual post — but that tool isn't guaranteed to be
+ * supported by every model/key, so on failure this transparently retries
+ * without it rather than blocking on a feature that may not exist. */
+export async function generateReply(settings: Settings, input: ReplyInput): Promise<string> {
+  if (!settings.apiKey.trim()) {
+    throw new Error("설정 화면에서 Gemini API 키를 먼저 입력해주세요.");
+  }
+  if (!input.comment.trim()) {
+    throw new Error("댓글 내용을 입력해주세요.");
+  }
+
+  const tryUrlContext = !!input.postLink.trim();
+  try {
+    return await requestReply(settings, input, tryUrlContext);
+  } catch (e) {
+    if (tryUrlContext && e instanceof Error && /\b400\b/.test(e.message)) {
+      // Likely the url_context tool isn't supported for this model/key —
+      // fall back to comment + manual context only instead of failing.
+      return await requestReply(settings, input, false);
+    }
+    throw e;
+  }
+}
+
+function buildReplyPrompt(input: ReplyInput, useUrlContext: boolean): string {
+  const linkLine =
+    useUrlContext && input.postLink.trim()
+      ? `원문 포스팅 링크(가능하면 내용을 참고하세요): ${input.postLink.trim()}`
+      : "";
+  const contextLine = input.postContext.trim()
+    ? `포스팅 내용 참고(사용자가 직접 입력): ${input.postContext.trim()}`
+    : "";
+
+  return `당신은 네이버 블로그를 운영하는 인기 파워블로거입니다. 아래는 본인 포스팅에 독자가 남긴 댓글입니다. 이 댓글에 달 대댓글(답글)을 작성하세요.
+
+${linkLine}
+${contextLine}
+독자가 남긴 댓글: "${input.comment.trim()}"
+
+[작성 규칙]
+- 실제 블로그 답글처럼 짧고 친근하게 작성 (보통 1~3문장, 길게 늘어놓지 말 것).
+- 댓글 내용에 실제로 반응할 것: 질문이면 답하고, 칭찬이면 감사 인사, 정보 공유면 공감하는 식으로 댓글 맥락에 정확히 맞게.
+- 존댓말 기반이지만 친근한 구어체 ("~해요", "~네요" 등), 이모지는 1~2개 정도만 자연스럽게 사용.
+- 과장되거나 근거 없는 내용은 쓰지 말 것.
+- 다른 설명이나 따옴표 없이, 실제로 댓글창에 바로 붙여넣을 답글 텍스트만 출력하세요.`;
+}
+
+async function requestReply(
+  settings: Settings,
+  input: ReplyInput,
+  useUrlContext: boolean,
+): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    settings.model,
+  )}:generateContent`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": settings.apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: buildReplyPrompt(input, useUrlContext) }] }],
+        ...(useUrlContext ? { tools: [{ url_context: {} }] } : {}),
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 1024,
+        },
+      }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("요청이 시간 안에 끝나지 않아 중단했습니다. 다시 시도해주세요.");
+    }
+    throw new Error(
+      "Gemini 서버에 연결하지 못했습니다. Wi-Fi/데이터 연결 상태를 확인하고 다시 시도해주세요.",
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    if (res.status === 404) {
+      throw new Error(
+        `모델 "${settings.model}"을(를) 찾을 수 없습니다. 설정 화면에서 "사용 가능한 모델 불러오기"로 현재 키가 지원하는 모델을 다시 선택해주세요.`,
+      );
+    }
+    throw new Error(`Gemini API 오류 (${res.status}): ${errText.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text?.trim()) {
+    throw new Error("Gemini 응답에서 결과 텍스트를 찾을 수 없습니다.");
+  }
+
+  // Strip surrounding quotes some models add defensively despite instructions.
+  return text.trim().replace(/^["'“](.*)["'”]$/s, "$1").trim();
 }
