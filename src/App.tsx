@@ -106,6 +106,21 @@ export default function App() {
     setPostScreen("compose");
   }, [postScreen]);
 
+  // Header icons stay visible and active on every tab/screen (previously
+  // 🏠/🕘 only rendered on the post tab, which read as the header "breaking"
+  // when switching to the reply tab). Both now jump back to the post tab
+  // first if needed, so they work as a single consistent "go home"/"go to
+  // history" affordance no matter where you are.
+  const goHome = useCallback(() => {
+    setActiveTab("post");
+    goBackToMain();
+  }, [goBackToMain]);
+
+  const goToHistory = useCallback(() => {
+    setActiveTab("post");
+    setPostScreen("history");
+  }, []);
+
   // Hardware back button: settings (an overlay reachable from either tab)
   // closes first; then sub-screens return to the post tab's compose screen;
   // then the reply tab falls back to the post tab. Only from the post tab's
@@ -205,20 +220,12 @@ export default function App() {
       <header className="app-header">
         <h1>블로그 포스팅 AI</h1>
         <div className="header-actions">
-          {activeTab === "post" && postScreen !== "compose" && (
-            <button className="icon-btn" onClick={goBackToMain} aria-label="홈으로">
-              🏠
-            </button>
-          )}
-          {activeTab === "post" && (
-            <button
-              className="icon-btn"
-              onClick={() => setPostScreen("history")}
-              aria-label="작성 기록"
-            >
-              🕘
-            </button>
-          )}
+          <button className="icon-btn" onClick={goHome} aria-label="홈으로">
+            🏠
+          </button>
+          <button className="icon-btn" onClick={goToHistory} aria-label="작성 기록">
+            🕘
+          </button>
           <button className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="설정">
             ⚙
           </button>
