@@ -106,20 +106,28 @@ export default function App() {
     setPostScreen("compose");
   }, [postScreen]);
 
-  // Header icons stay visible and active on every tab/screen (previously
-  // 🏠/🕘 only rendered on the post tab, which read as the header "breaking"
-  // when switching to the reply tab). Both now jump back to the post tab
-  // first if needed, so they work as a single consistent "go home"/"go to
-  // history" affordance no matter where you are.
+  // Header icons stay visible and active on every tab/screen/overlay
+  // (previously 🏠/🕘 only rendered on the post tab, and — separately —
+  // neither closed the settings overlay, so clicking them while Settings
+  // was open updated state underneath it with nothing visibly changing,
+  // looking like the buttons were dead). Both now always close settings
+  // and jump back to the post tab first if needed.
   const goHome = useCallback(() => {
+    setSettingsOpen(false);
     setActiveTab("post");
     goBackToMain();
   }, [goBackToMain]);
 
   const goToHistory = useCallback(() => {
+    setSettingsOpen(false);
     setActiveTab("post");
     setPostScreen("history");
   }, []);
+
+  function switchTab(tab: Tab) {
+    setSettingsOpen(false);
+    setActiveTab(tab);
+  }
 
   // Hardware back button: settings (an overlay reachable from either tab)
   // closes first; then sub-screens return to the post tab's compose screen;
@@ -236,14 +244,14 @@ export default function App() {
         <button
           type="button"
           className={`tab-btn ${activeTab === "post" ? "tab-btn-active" : ""}`}
-          onClick={() => setActiveTab("post")}
+          onClick={() => switchTab("post")}
         >
           📝 포스팅 작성
         </button>
         <button
           type="button"
           className={`tab-btn ${activeTab === "reply" ? "tab-btn-active" : ""}`}
-          onClick={() => setActiveTab("reply")}
+          onClick={() => switchTab("reply")}
         >
           💬 댓글 답변
         </button>
