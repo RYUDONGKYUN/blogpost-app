@@ -56,7 +56,10 @@ export default function App() {
     setComposeMode("photo");
   }
 
-  function handleSeoComplete(post: GeneratedPost) {
+  async function handleSeoComplete(post: GeneratedPost, images: UploadedImage[]) {
+    const thumbnail = images[0]
+      ? await makeThumbnail(images[0].dataUrl).catch(() => undefined)
+      : undefined;
     addHistoryEntry({
       id: crypto.randomUUID(),
       category: "SEO정보글",
@@ -64,9 +67,10 @@ export default function App() {
       title: post.title,
       keywords: post.keywords,
       body: post.body,
+      thumbnail,
       createdAt: Date.now(),
     });
-    setResult({ post, images: [] });
+    setResult({ post, images });
     setPostScreen("result");
   }
 

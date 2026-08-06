@@ -1,12 +1,22 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { designOutline, findKeywords, generateSeoContent } from "../seo";
 import { loadRecentHistory } from "../storage";
+import { fileToUploadedImage, nativeImageToUploadedImage } from "../imageUtils";
+import { GalleryPicker } from "../galleryPicker";
 import { SEO_PURPOSES } from "../types";
-import type { GeneratedPost, SeoKeywordResult, SeoOutline, SeoPurpose, Settings } from "../types";
+import type {
+  GeneratedPost,
+  SeoKeywordResult,
+  SeoOutline,
+  SeoPurpose,
+  Settings,
+  UploadedImage,
+} from "../types";
 
 interface Props {
   settings: Settings;
-  onComplete: (post: GeneratedPost) => void;
+  onComplete: (post: GeneratedPost, images: UploadedImage[]) => void;
 }
 
 type Stage = "topic" | "keywords" | "outline";
@@ -39,6 +49,10 @@ export default function SeoView({ settings, onComplete }: Props) {
   const [selectedTitle, setSelectedTitle] = useState("");
 
   const [outline, setOutline] = useState<SeoOutline | null>(null);
+  const [sectionImages, setSectionImages] = useState<UploadedImage[][]>([]);
+  const [loadingSection, setLoadingSection] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const targetSectionRef = useRef<number | null>(null);
 
   async function handleFindKeywords() {
     if (!topic.trim()) {
@@ -81,6 +95,7 @@ export default function SeoView({ settings, onComplete }: Props) {
     try {
       const result = await designOutline(settings, { topic, purpose }, selectedTitle, keywords);
       setOutline(result);
+      setSectionImages(result.sections.map(() => []));
       setStage("outline");
     } catch (e) {
       const message = e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
@@ -88,6 +103,60 @@ export default function SeoView({ settings, onComplete }: Props) {
       window.alert(message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  function addImagesToSection(sectionIndex: number, images: UploadedImage[]) {
+    setSectionImages((prev) => {
+      const next = [...prev];
+      next[sectionIndex] = [...(next[sectionIndex] ?? []), ...images];
+      return next;
+    });
+  }
+
+  function removeImageFromSection(sectionIndex: number, imageId: string) {
+    setSectionImages((prev) => {
+      const next = [...prev];
+      next[sectionIndex] = (next[sectionIndex] ?? []).filter((img) => img.id !== imageId);
+      return next;
+    });
+  }
+
+  async function handlePickPhotosForSection(sectionIndex: number) {
+    if (!Capacitor.isNativePlatform()) {
+      targetSectionRef.current = sectionIndex;
+      fileInputRef.current?.click();
+      return;
+    }
+    setLoadingSection(sectionIndex);
+    try {
+      const { images: picked } = await GalleryPicker.pickImages();
+      const newImages = picked.map((img) =>
+        nativeImageToUploadedImage(img.base64, img.mimeType, img.fileName),
+      );
+      addImagesToSection(sectionIndex, newImages);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!message.includes("취소")) {
+        window.alert("사진을 불러오지 못했습니다. 다시 시도해주세요.");
+      }
+    } finally {
+      setLoadingSection(null);
+    }
+  }
+
+  async function handleFileInputChange(files: FileList | null) {
+    const sectionIndex = targetSectionRef.current;
+    if (!files || files.length === 0 || sectionIndex === null) return;
+    setLoadingSection(sectionIndex);
+    try {
+      const newImages = await Promise.all(Array.from(files).map(fileToUploadedImage));
+      addImagesToSection(sectionIndex, newImages);
+    } catch {
+      window.alert("사진을 불러오지 못했습니다. 다시 시도해주세요.");
+    } finally {
+      setLoadingSection(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -99,16 +168,17 @@ export default function SeoView({ settings, onComplete }: Props) {
     try {
       const keywords = [...selectedSub, ...selectedRelated];
       const history = loadRecentHistory("SEO정보글");
-      const post = await generateSeoContent(
+      const { post, images } = await generateSeoContent(
         settings,
         { topic, purpose },
         outline,
         selectedTitle,
         keywords,
+        sectionImages,
         history,
         (s) => setBusyLabel(s === "draft" ? "본문을 쓰는 중..." : "사람 손길로 다듬는 중..."),
       );
-      onComplete(post);
+      onComplete(post, images);
     } catch (e) {
       const message = e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
       setError(message);
@@ -122,6 +192,15 @@ export default function SeoView({ settings, onComplete }: Props) {
 
   return (
     <div className="view">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => handleFileInputChange(e.target.files)}
+      />
+
       <div className="seo-stepper">
         {STEPS.map((s, i) => (
           <div
@@ -260,19 +339,57 @@ export default function SeoView({ settings, onComplete }: Props) {
           </div>
 
           <div className="field">
-            <span>SEO 구조 설계 완료</span>
-            {outline.sections.map((section, i) => (
-              <div key={i} className="outline-section">
-                <strong>
-                  {i + 1}. {section.heading}
-                </strong>
-                <ul>
-                  {section.bullets.map((b, j) => (
-                    <li key={j}>{b}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            <span>
+              SEO 구조 설계 완료 <span className="hint">(항목마다 필요하면 사진을 추가하세요)</span>
+            </span>
+            {outline.sections.map((section, i) => {
+              const images = sectionImages[i] ?? [];
+              return (
+                <div key={i} className="outline-section">
+                  <strong>
+                    {i + 1}. {section.heading}
+                  </strong>
+                  <ul>
+                    {section.bullets.map((b, j) => (
+                      <li key={j}>{b}</li>
+                    ))}
+                  </ul>
+
+                  {images.length > 0 && (
+                    <div className="thumb-grid outline-thumb-grid">
+                      {images.map((img) => (
+                        <div key={img.id} className="thumb">
+                          <img src={img.dataUrl} alt={img.fileName} />
+                          <button
+                            type="button"
+                            className="thumb-remove"
+                            onClick={() => removeImageFromSection(i, img.id)}
+                            aria-label="사진 삭제"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    className="ghost-btn outline-photo-btn"
+                    onClick={() => handlePickPhotosForSection(i)}
+                    disabled={loadingSection === i}
+                  >
+                    {loadingSection === i ? (
+                      <>
+                        <span className="spinner" /> 불러오는 중...
+                      </>
+                    ) : (
+                      "📷 이 항목에 사진 추가"
+                    )}
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           {error && <p className="error">{error}</p>}

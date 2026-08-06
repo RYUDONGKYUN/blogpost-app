@@ -6,6 +6,7 @@ import type {
   SeoOutline,
   SeoTopicInput,
   Settings,
+  UploadedImage,
 } from "./types";
 
 /** Shared voice/persona instruction for every SEO-flow prompt, so keyword
@@ -23,6 +24,7 @@ async function callGemini(
   schema: unknown,
   maxOutputTokens: number,
   timeoutMs: number,
+  images: UploadedImage[] = [],
 ): Promise<Record<string, unknown>> {
   if (!settings.apiKey.trim()) {
     throw new Error("설정 화면에서 Gemini API 키를 먼저 입력해주세요.");
@@ -31,6 +33,11 @@ async function callGemini(
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     settings.model,
   )}:generateContent`;
+
+  const parts: unknown[] = [{ text: prompt }];
+  for (const img of images) {
+    parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -43,7 +50,7 @@ async function callGemini(
         "x-goog-api-key": settings.apiKey,
       },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{ role: "user", parts }],
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: schema,
@@ -181,9 +188,10 @@ export async function designOutline(
 확정된 제목: ${selectedTitle}
 반영할 키워드: ${selectedKeywords.join(", ")}
 
-[sections] (4~6개)
-- 글을 처음부터 끝까지 자연스럽게 읽히게 만드는 H2 소제목들을 순서대로 설계하세요 (도입부 → 핵심 정보/노하우 여러 개 → 마무리 순서 권장).
-- 각 소제목은 "~하는 이유", "~할 때 주의할 점"처럼 궁금증을 유발하는 자연스러운 문구로.
+[sections]
+- 글을 처음부터 끝까지 자연스럽게 읽히게 만드는 H2 소제목들을 순서대로 설계하세요 (도입부 → 핵심 정보/노하우 여러 개 → 마무리 순서 권장). 보통 4~6개.
+- 주제가 "출연진 총정리", "TOP 10", "OO 종류" 처럼 여러 인물·항목을 나열하는 성격이면, 도입부/마무리를 제외한 나머지는 각 인물·항목마다 하나씩 별도의 소제목을 만드세요 (예: 사람이 12명이면 그 12명 각각 1개씩) — 나중에 각 소제목에 사진을 하나씩 붙일 수 있어야 하기 때문에 이 경우 항목을 묶어서 하나의 소제목으로 뭉치지 마세요.
+- 각 소제목은 "~하는 이유", "~할 때 주의할 점"처럼 궁금증을 유발하는 자연스러운 문구로 (나열형 항목 소제목은 이름/항목명을 그대로 넣어도 됩니다).
 - 각 소제목 아래 bullets에는 그 섹션에서 실제로 다룰 핵심 포인트를 1~3개 짧게 요약.
 
 [estimatedLength]
@@ -235,6 +243,7 @@ async function humanizeBody(settings: Settings, draft: string): Promise<string> 
 - "~라고 할 수 있습니다", "매우 중요합니다", "~하는 것이 좋습니다" 같은 AI 특유의 설명체 문구를, 실제 사람이 편하게 말하듯 자연스러운 표현으로 바꾸세요.
 - 소제목, 핵심 정보, 키워드, 문단 순서, 전체 분량은 그대로 유지하세요 — 표현과 문장 리듬만 사람처럼 다듬는 것이 목표입니다.
 - 이모지는 과하지 않게 원래 있던 수준으로 유지하세요.
+- 본문에 "[사진1]", "[사진2]" 같은 마커가 있다면, 절대 지우거나 문구를 바꾸지 말고 정확히 같은 위치·같은 표기 그대로 유지하세요.
 
 [초안]
 ${draft}
@@ -248,18 +257,54 @@ JSON 스키마에 맞춰 body 필드로, 다듬은 최종 본문 전체를 출�
   return body || draft;
 }
 
+/** Builds the "[사진N] goes in section X" instruction block and the flat,
+ * globally-numbered image list (in section order) that both the prompt and
+ * the final ResultView/history need to agree on. Sections with no attached
+ * photos are simply omitted from the instructions. */
+function buildPhotoPlan(
+  outline: SeoOutline,
+  sectionImages: UploadedImage[][],
+): { instructions: string; images: UploadedImage[] } {
+  const images: UploadedImage[] = [];
+  const lines: string[] = [];
+
+  outline.sections.forEach((section, sectionIndex) => {
+    const imgs = sectionImages[sectionIndex] ?? [];
+    if (imgs.length === 0) return;
+    const numbers: number[] = [];
+    for (const img of imgs) {
+      images.push(img);
+      numbers.push(images.length);
+    }
+    const markers = numbers.map((n) => `[사진${n}]`).join(", ");
+    lines.push(`- "${section.heading}" 섹션 → ${markers} 를 그 섹션 설명 중 알맞은 위치에 배치`);
+  });
+
+  const instructions =
+    lines.length === 0
+      ? ""
+      : `\n[사진 배치 지침 — 반드시 지킬 것]
+${lines.join("\n")}
+위에 지정되지 않은 소제목에는 사진 마커를 넣지 마세요. 마커는 정확히 "[사진N]" 형식으로 독립된 줄에 넣고, 실제 사진 내용(누구인지/무엇인지)을 보고 그 사람·항목을 설명하는 문장 바로 옆에 배치하세요.`;
+
+  return { instructions, images };
+}
+
 export async function generateSeoContent(
   settings: Settings,
   input: SeoTopicInput,
   outline: SeoOutline,
   selectedTitle: string,
   selectedKeywords: string[],
+  sectionImages: UploadedImage[][] = [],
   history: PostHistoryEntry[] = [],
   onStage?: (stage: "draft" | "polish") => void,
-): Promise<GeneratedPost> {
+): Promise<{ post: GeneratedPost; images: UploadedImage[] }> {
   const outlineText = outline.sections
     .map((s, i) => `${i + 1}. ${s.heading}\n${s.bullets.map((b) => `   - ${b}`).join("\n")}`)
     .join("\n\n");
+
+  const { instructions: photoInstructions, images } = buildPhotoPlan(outline, sectionImages);
 
   const prompt = `${PERSONA}
 
@@ -273,6 +318,7 @@ export async function generateSeoContent(
 
 [글 구조 — 아래 소제목과 순서를 그대로 따를 것]
 ${outlineText}
+${photoInstructions}
 ${buildHistorySection(history)}
 
 [작성 규칙]
@@ -286,7 +332,7 @@ ${buildHistorySection(history)}
 JSON 스키마에 맞춰 body 필드로 응답하세요.`;
 
   onStage?.("draft");
-  const parsed = await callGemini(settings, prompt, CONTENT_SCHEMA, 8192, 180_000);
+  const parsed = await callGemini(settings, prompt, CONTENT_SCHEMA, 8192, 180_000, images);
   const draft = typeof parsed.body === "string" ? parsed.body.trim() : "";
   if (!draft) {
     throw new SeoRequestError("Gemini 응답 형식이 올바르지 않습니다.");
@@ -295,5 +341,5 @@ JSON 스키마에 맞춰 body 필드로 응답하세요.`;
   onStage?.("polish");
   const body = await humanizeBody(settings, draft);
 
-  return { title: selectedTitle, keywords: selectedKeywords, body };
+  return { post: { title: selectedTitle, keywords: selectedKeywords, body }, images };
 }
