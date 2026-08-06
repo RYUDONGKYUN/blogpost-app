@@ -43,7 +43,7 @@ const MAX_MALFORMED_RETRIES = 2;
 
 /** Extracts a short "opening hook" from a generated body, used to steer future
  * generations away from repeating the same phrasing. */
-function extractOpening(body: string): string {
+export function extractOpening(body: string): string {
   const firstLine = body
     .split("\n")
     .map((line) => line.trim())
@@ -51,7 +51,7 @@ function extractOpening(body: string): string {
   return (firstLine ?? "").slice(0, 80);
 }
 
-function buildHistorySection(history: PostHistoryEntry[]): string {
+export function buildHistorySection(history: PostHistoryEntry[]): string {
   if (history.length === 0) return "";
   const lines = history
     .map((h) => `- 제목: "${h.title}" / 도입부: "${extractOpening(h.body)}"`)

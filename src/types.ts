@@ -1,6 +1,37 @@
-export type Category = "맛집" | "레시피" | "운동" | "여행" | "기타";
+export type Category = "맛집" | "레시피" | "운동" | "여행" | "기타" | "SEO정보글";
 
 export const CATEGORIES: Category[] = ["맛집", "레시피", "운동", "여행", "기타"];
+
+export type SeoPurpose = "정보 전달" | "후기·리뷰" | "비교·추천" | "노하우·꿀팁" | "문제 해결";
+
+export const SEO_PURPOSES: SeoPurpose[] = [
+  "정보 전달",
+  "후기·리뷰",
+  "비교·추천",
+  "노하우·꿀팁",
+  "문제 해결",
+];
+
+export interface SeoTopicInput {
+  topic: string;
+  purpose: SeoPurpose;
+}
+
+export interface SeoKeywordResult {
+  subKeywords: string[];
+  relatedKeywords: string[];
+  titleCandidates: string[];
+}
+
+export interface SeoOutlineSection {
+  heading: string;
+  bullets: string[];
+}
+
+export interface SeoOutline {
+  estimatedLength: number;
+  sections: SeoOutlineSection[];
+}
 
 export interface Settings {
   apiKey: string;

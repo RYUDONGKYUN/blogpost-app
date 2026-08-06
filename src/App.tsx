@@ -4,6 +4,7 @@ import { Toast } from "@capacitor/toast";
 import "./App.css";
 import SettingsView from "./components/SettingsView";
 import ComposeView from "./components/ComposeView";
+import SeoView from "./components/SeoView";
 import ResultView from "./components/ResultView";
 import HistoryView from "./components/HistoryView";
 import ReplyView from "./components/ReplyView";
@@ -14,6 +15,7 @@ import type { ClarificationTurn, ComposeInput, GeneratedPost, Settings, Uploaded
 
 type Tab = "post" | "reply";
 type PostScreen = "compose" | "result" | "history";
+type ComposeMode = "photo" | "seo";
 
 const EMPTY_COMPOSE: ComposeInput = {
   category: "맛집",
@@ -29,6 +31,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings());
   const [activeTab, setActiveTab] = useState<Tab>("post");
   const [postScreen, setPostScreen] = useState<PostScreen>("compose");
+  const [composeMode, setComposeMode] = useState<ComposeMode>("photo");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +53,21 @@ export default function App() {
     setQaHistory([]);
     setPendingQuestion(null);
     setAnswerDraft("");
+    setComposeMode("photo");
+  }
+
+  function handleSeoComplete(post: GeneratedPost) {
+    addHistoryEntry({
+      id: crypto.randomUUID(),
+      category: "SEO정보글",
+      place: "",
+      title: post.title,
+      keywords: post.keywords,
+      body: post.body,
+      createdAt: Date.now(),
+    });
+    setResult({ post, images: [] });
+    setPostScreen("result");
   }
 
   const goBackToMain = useCallback(() => {
@@ -212,37 +230,60 @@ export default function App() {
           <>
             {postScreen === "compose" && (
               <>
-                <ComposeView
-                  value={composeInput}
-                  onChange={setComposeInput}
-                  onGenerate={handleGenerate}
-                  busy={busy}
-                  errorMessage={error}
-                  blocked={!!pendingQuestion}
-                />
-                {pendingQuestion && (
-                  <div className="view clarification-box">
-                    <p>
-                      <strong>글을 쓰기 전에 하나만 확인할게요:</strong>
-                      <br />
-                      {pendingQuestion}
-                    </p>
-                    <textarea
-                      value={answerDraft}
-                      onChange={(e) => setAnswerDraft(e.target.value)}
-                      rows={2}
-                      placeholder="답변을 입력하세요"
+                <div className="chip-row compose-mode-row">
+                  <button
+                    type="button"
+                    className={`chip ${composeMode === "photo" ? "chip-active" : ""}`}
+                    onClick={() => setComposeMode("photo")}
+                  >
+                    📷 사진 후기
+                  </button>
+                  <button
+                    type="button"
+                    className={`chip ${composeMode === "seo" ? "chip-active" : ""}`}
+                    onClick={() => setComposeMode("seo")}
+                  >
+                    🔍 SEO 정보글
+                  </button>
+                </div>
+
+                {composeMode === "seo" ? (
+                  <SeoView settings={settings} onComplete={handleSeoComplete} />
+                ) : (
+                  <>
+                    <ComposeView
+                      value={composeInput}
+                      onChange={setComposeInput}
+                      onGenerate={handleGenerate}
+                      busy={busy}
+                      errorMessage={error}
+                      blocked={!!pendingQuestion}
                     />
-                    <div className="actions">
-                      <button
-                        className="primary-btn"
-                        onClick={handleAnswerSubmit}
-                        disabled={busy || !answerDraft.trim()}
-                      >
-                        {busy ? "다시 작성 중..." : "답변하고 계속 작성하기"}
-                      </button>
-                    </div>
-                  </div>
+                    {pendingQuestion && (
+                      <div className="view clarification-box">
+                        <p>
+                          <strong>글을 쓰기 전에 하나만 확인할게요:</strong>
+                          <br />
+                          {pendingQuestion}
+                        </p>
+                        <textarea
+                          value={answerDraft}
+                          onChange={(e) => setAnswerDraft(e.target.value)}
+                          rows={2}
+                          placeholder="답변을 입력하세요"
+                        />
+                        <div className="actions">
+                          <button
+                            className="primary-btn"
+                            onClick={handleAnswerSubmit}
+                            disabled={busy || !answerDraft.trim()}
+                          >
+                            {busy ? "다시 작성 중..." : "답변하고 계속 작성하기"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
