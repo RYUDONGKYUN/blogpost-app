@@ -11,7 +11,14 @@ import ReplyView from "./components/ReplyView";
 import { addHistoryEntry, loadArchive, loadRecentHistory, loadSettings, saveSettings } from "./storage";
 import { generatePost } from "./gemini";
 import { makeThumbnail } from "./imageUtils";
-import type { ClarificationTurn, ComposeInput, GeneratedPost, Settings, UploadedImage } from "./types";
+import type {
+  ClarificationTurn,
+  ComposeInput,
+  GeneratedPost,
+  SeoState,
+  Settings,
+  UploadedImage,
+} from "./types";
 
 type Tab = "post" | "reply";
 type PostScreen = "compose" | "result" | "history";
@@ -27,6 +34,18 @@ const EMPTY_COMPOSE: ComposeInput = {
   images: [],
 };
 
+const EMPTY_SEO: SeoState = {
+  stage: "topic",
+  topic: "",
+  purpose: "정보 전달",
+  keywordResult: null,
+  selectedSub: [],
+  selectedRelated: [],
+  selectedTitle: "",
+  outline: null,
+  sectionImages: [],
+};
+
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings());
   const [activeTab, setActiveTab] = useState<Tab>("post");
@@ -36,6 +55,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [composeInput, setComposeInput] = useState<ComposeInput>(EMPTY_COMPOSE);
+  const [seoState, setSeoState] = useState<SeoState>(EMPTY_SEO);
   const [qaHistory, setQaHistory] = useState<ClarificationTurn[]>([]);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [answerDraft, setAnswerDraft] = useState("");
@@ -54,6 +74,7 @@ export default function App() {
     setPendingQuestion(null);
     setAnswerDraft("");
     setComposeMode("photo");
+    setSeoState(EMPTY_SEO);
   }
 
   async function handleSeoComplete(post: GeneratedPost, images: UploadedImage[]) {
@@ -234,25 +255,33 @@ export default function App() {
           <>
             {postScreen === "compose" && (
               <>
-                <div className="chip-row compose-mode-row">
-                  <button
-                    type="button"
-                    className={`chip ${composeMode === "photo" ? "chip-active" : ""}`}
-                    onClick={() => setComposeMode("photo")}
-                  >
-                    📷 사진 후기
-                  </button>
-                  <button
-                    type="button"
-                    className={`chip ${composeMode === "seo" ? "chip-active" : ""}`}
-                    onClick={() => setComposeMode("seo")}
-                  >
-                    🔍 SEO 정보글
-                  </button>
+                <div className="field compose-mode-field">
+                  <span>작성 방식</span>
+                  <div className="chip-row">
+                    <button
+                      type="button"
+                      className={`chip ${composeMode === "photo" ? "chip-active" : ""}`}
+                      onClick={() => setComposeMode("photo")}
+                    >
+                      📷 사진 후기
+                    </button>
+                    <button
+                      type="button"
+                      className={`chip ${composeMode === "seo" ? "chip-active" : ""}`}
+                      onClick={() => setComposeMode("seo")}
+                    >
+                      🔍 SEO 정보글
+                    </button>
+                  </div>
                 </div>
 
                 {composeMode === "seo" ? (
-                  <SeoView settings={settings} onComplete={handleSeoComplete} />
+                  <SeoView
+                    value={seoState}
+                    onChange={setSeoState}
+                    settings={settings}
+                    onComplete={handleSeoComplete}
+                  />
                 ) : (
                   <>
                     <ComposeView

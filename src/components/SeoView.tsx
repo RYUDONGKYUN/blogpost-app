@@ -5,54 +5,44 @@ import { loadRecentHistory } from "../storage";
 import { fileToUploadedImage, nativeImageToUploadedImage } from "../imageUtils";
 import { GalleryPicker } from "../galleryPicker";
 import { SEO_PURPOSES } from "../types";
-import type {
-  GeneratedPost,
-  SeoKeywordResult,
-  SeoOutline,
-  SeoPurpose,
-  Settings,
-  UploadedImage,
-} from "../types";
+import type { GeneratedPost, SeoState, Settings, UploadedImage } from "../types";
 
 interface Props {
+  value: SeoState;
+  onChange: (next: SeoState) => void;
   settings: Settings;
   onComplete: (post: GeneratedPost, images: UploadedImage[]) => void;
 }
 
-type Stage = "topic" | "keywords" | "outline";
-
-const STEPS: { key: Stage; label: string; icon: string }[] = [
+const STEPS: { key: SeoState["stage"]; label: string; icon: string }[] = [
   { key: "topic", label: "키워드", icon: "🔍" },
   { key: "keywords", label: "구조", icon: "🧭" },
   { key: "outline", label: "본문", icon: "✍️" },
 ];
 
-function toggleInSet(set: Set<string>, value: string): Set<string> {
-  const next = new Set(set);
-  if (next.has(value)) next.delete(value);
-  else next.add(value);
-  return next;
+function toggleInList(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
 
-export default function SeoView({ settings, onComplete }: Props) {
-  const [stage, setStage] = useState<Stage>("topic");
+export default function SeoView({ value, onChange, settings, onComplete }: Props) {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  const [topic, setTopic] = useState("");
-  const [purpose, setPurpose] = useState<SeoPurpose>("정보 전달");
-
-  const [keywordResult, setKeywordResult] = useState<SeoKeywordResult | null>(null);
-  const [selectedSub, setSelectedSub] = useState<Set<string>>(new Set());
-  const [selectedRelated, setSelectedRelated] = useState<Set<string>>(new Set());
-  const [selectedTitle, setSelectedTitle] = useState("");
-
-  const [outline, setOutline] = useState<SeoOutline | null>(null);
-  const [sectionImages, setSectionImages] = useState<UploadedImage[][]>([]);
   const [loadingSection, setLoadingSection] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetSectionRef = useRef<number | null>(null);
+
+  const {
+    stage,
+    topic,
+    purpose,
+    keywordResult,
+    selectedSub,
+    selectedRelated,
+    selectedTitle,
+    outline,
+    sectionImages,
+  } = value;
 
   async function handleFindKeywords() {
     if (!topic.trim()) {
@@ -65,11 +55,14 @@ export default function SeoView({ settings, onComplete }: Props) {
     try {
       const history = loadRecentHistory("SEO정보글");
       const result = await findKeywords(settings, { topic, purpose }, history);
-      setKeywordResult(result);
-      setSelectedSub(new Set(result.subKeywords));
-      setSelectedRelated(new Set(result.relatedKeywords));
-      setSelectedTitle(result.titleCandidates[0] ?? "");
-      setStage("keywords");
+      onChange({
+        ...value,
+        keywordResult: result,
+        selectedSub: result.subKeywords,
+        selectedRelated: result.relatedKeywords,
+        selectedTitle: result.titleCandidates[0] ?? "",
+        stage: "keywords",
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
       setError(message);
@@ -94,9 +87,12 @@ export default function SeoView({ settings, onComplete }: Props) {
     setBusyLabel("글 구조를 설계하는 중...");
     try {
       const result = await designOutline(settings, { topic, purpose }, selectedTitle, keywords);
-      setOutline(result);
-      setSectionImages(result.sections.map(() => []));
-      setStage("outline");
+      onChange({
+        ...value,
+        outline: result,
+        sectionImages: result.sections.map(() => []),
+        stage: "outline",
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
       setError(message);
@@ -107,19 +103,15 @@ export default function SeoView({ settings, onComplete }: Props) {
   }
 
   function addImagesToSection(sectionIndex: number, images: UploadedImage[]) {
-    setSectionImages((prev) => {
-      const next = [...prev];
-      next[sectionIndex] = [...(next[sectionIndex] ?? []), ...images];
-      return next;
-    });
+    const next = [...sectionImages];
+    next[sectionIndex] = [...(next[sectionIndex] ?? []), ...images];
+    onChange({ ...value, sectionImages: next });
   }
 
   function removeImageFromSection(sectionIndex: number, imageId: string) {
-    setSectionImages((prev) => {
-      const next = [...prev];
-      next[sectionIndex] = (next[sectionIndex] ?? []).filter((img) => img.id !== imageId);
-      return next;
-    });
+    const next = [...sectionImages];
+    next[sectionIndex] = (next[sectionIndex] ?? []).filter((img) => img.id !== imageId);
+    onChange({ ...value, sectionImages: next });
   }
 
   async function handlePickPhotosForSection(sectionIndex: number) {
@@ -222,7 +214,7 @@ export default function SeoView({ settings, onComplete }: Props) {
             <input
               type="text"
               value={topic}
-              onChange={(e) => setTopic(e.target.value)}
+              onChange={(e) => onChange({ ...value, topic: e.target.value })}
               placeholder="예: 스레드 조회수 10만 만드는 방법"
             />
           </label>
@@ -235,7 +227,7 @@ export default function SeoView({ settings, onComplete }: Props) {
                   key={p}
                   type="button"
                   className={`chip ${purpose === p ? "chip-active" : ""}`}
-                  onClick={() => setPurpose(p)}
+                  onClick={() => onChange({ ...value, purpose: p })}
                 >
                   {p}
                 </button>
@@ -272,8 +264,8 @@ export default function SeoView({ settings, onComplete }: Props) {
                 <button
                   key={k}
                   type="button"
-                  className={`chip ${selectedSub.has(k) ? "chip-active" : ""}`}
-                  onClick={() => setSelectedSub(toggleInSet(selectedSub, k))}
+                  className={`chip ${selectedSub.includes(k) ? "chip-active" : ""}`}
+                  onClick={() => onChange({ ...value, selectedSub: toggleInList(selectedSub, k) })}
                 >
                   {k}
                 </button>
@@ -288,8 +280,10 @@ export default function SeoView({ settings, onComplete }: Props) {
                 <button
                   key={k}
                   type="button"
-                  className={`chip ${selectedRelated.has(k) ? "chip-active" : ""}`}
-                  onClick={() => setSelectedRelated(toggleInSet(selectedRelated, k))}
+                  className={`chip ${selectedRelated.includes(k) ? "chip-active" : ""}`}
+                  onClick={() =>
+                    onChange({ ...value, selectedRelated: toggleInList(selectedRelated, k) })
+                  }
                 >
                   {k}
                 </button>
@@ -304,7 +298,7 @@ export default function SeoView({ settings, onComplete }: Props) {
                 key={title}
                 type="button"
                 className={`option-card ${selectedTitle === title ? "option-card-active" : ""}`}
-                onClick={() => setSelectedTitle(title)}
+                onClick={() => onChange({ ...value, selectedTitle: title })}
               >
                 <span className="option-card-dot" />
                 {title}
@@ -315,7 +309,11 @@ export default function SeoView({ settings, onComplete }: Props) {
           {error && <p className="error">{error}</p>}
 
           <div className="actions">
-            <button className="ghost-btn" onClick={() => setStage("topic")} disabled={busy}>
+            <button
+              className="ghost-btn"
+              onClick={() => onChange({ ...value, stage: "topic" })}
+              disabled={busy}
+            >
               이전
             </button>
             <button className="primary-btn" onClick={handleDesignOutline} disabled={busy}>
@@ -395,7 +393,11 @@ export default function SeoView({ settings, onComplete }: Props) {
           {error && <p className="error">{error}</p>}
 
           <div className="actions">
-            <button className="ghost-btn" onClick={() => setStage("keywords")} disabled={busy}>
+            <button
+              className="ghost-btn"
+              onClick={() => onChange({ ...value, stage: "keywords" })}
+              disabled={busy}
+            >
               이전
             </button>
             <button className="primary-btn" onClick={handleGenerateContent} disabled={busy}>

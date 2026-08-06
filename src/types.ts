@@ -33,6 +33,24 @@ export interface SeoOutline {
   sections: SeoOutlineSection[];
 }
 
+/** Full in-progress state of the SEO wizard, owned by the parent (App.tsx)
+ * so it survives SeoView being unmounted — e.g. switching to the photo tab
+ * and back, or opening 설정/작성 기록, both of which remove SeoView from
+ * the tree entirely. Mirrors how ComposeInput is already lifted for the
+ * photo flow. */
+export interface SeoState {
+  stage: "topic" | "keywords" | "outline";
+  topic: string;
+  purpose: SeoPurpose;
+  keywordResult: SeoKeywordResult | null;
+  selectedSub: string[];
+  selectedRelated: string[];
+  selectedTitle: string;
+  outline: SeoOutline | null;
+  /** images attached to each outline section, indexed the same as outline.sections */
+  sectionImages: UploadedImage[][];
+}
+
 export interface Settings {
   apiKey: string;
   model: string;

@@ -570,8 +570,10 @@ textarea {
   max-width: 26em;
 }
 
-.compose-mode-row {
-  margin-bottom: -4px;
+.compose-mode-field {
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 /* SEO wizard progress stepper */
