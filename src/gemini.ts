@@ -128,6 +128,10 @@ function buildBodyRule(photoCount: number, category: ComposeInput["category"]): 
 - 본문 마지막 줄에 해시태그를 쓰지 마세요 (앱이 별도로 붙입니다).`;
 }
 
+// Fixed personal greeting, always the exact same text — attached in code
+// rather than left to the model so it can never be paraphrased or dropped.
+const GREETING = "안녕하세요. 레고입니다.";
+
 const LEGO_RATING_LEGEND = `1개 : 재방문 의사 없음. 여러모로 아쉬움이 많이 남았던 곳.
 2개 : 평범한 곳. 근처에 갈 일이 있다면 한 번쯤 고려해 볼 만함.
 3개 : 맛있고 만족스러움! 동네를 다시 방문한다면 갈만한 곳
@@ -383,7 +387,7 @@ export async function generatePost(
 
         let body = result.post.body;
         if (input.category === "맛집") {
-          body = `${insertDeterministicBoxes(body, input)}\n\n${LEGO_RATING_LEGEND}`;
+          body = `${GREETING}\n\n${insertDeterministicBoxes(body, input)}\n\n${LEGO_RATING_LEGEND}`;
         }
         const finalResult: GenerateResult = { status: "ready", post: { ...result.post, body } };
         return effectiveSettings.model !== settings.model
